@@ -189,6 +189,10 @@ public class VideoTabFragment extends Fragment implements AdapterView.OnItemSele
                 public void apply(final int returnCode, final String commandOutput) {
                     Log.d(TAG, String.format("FFmpeg process exited with rc %d", returnCode));
 
+                    Log.d(TAG, "FFmpeg process output:");
+
+                    FFmpeg.printLastCommandOutput(Log.INFO);
+
                     hideProgressDialog();
 
                     MainActivity.addUIAction(new Callable() {

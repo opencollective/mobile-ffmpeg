@@ -30,7 +30,7 @@ int execute(int argc, char **argv);
 @implementation MobileFFmpeg
 
 /** Global library version */
-NSString *const MOBILE_FFMPEG_VERSION = @"4.2.2";
+NSString *const MOBILE_FFMPEG_VERSION = @"4.3";
 
 /** Common return code values */
 int const RETURN_CODE_SUCCESS = 0;
@@ -82,13 +82,13 @@ extern int mobileffmpeg_system_execute(NSArray *arguments, NSMutableArray *comma
 + (int)executeWithArguments: (NSArray*)arguments {
     lastCommandOutput = [[NSMutableString alloc] init];
 
-    char **commandCharPArray = (char **)malloc(sizeof(char*) * ([arguments count] + 1));
+    char **commandCharPArray = (char **)av_malloc(sizeof(char*) * ([arguments count] + 1));
 
     /* PRESERVING CALLING FORMAT
      *
      * ffmpeg <arguments>
      */
-    commandCharPArray[0] = (char *)malloc(sizeof(char) * ([LIB_NAME length] + 1));
+    commandCharPArray[0] = (char *)av_malloc(sizeof(char) * ([LIB_NAME length] + 1));
     strcpy(commandCharPArray[0], [LIB_NAME UTF8String]);
 
     for (int i=0; i < [arguments count]; i++) {
@@ -100,8 +100,8 @@ extern int mobileffmpeg_system_execute(NSArray *arguments, NSMutableArray *comma
     lastReturnCode = execute(([arguments count] + 1), commandCharPArray);
 
     // CLEANUP
-    free(commandCharPArray[0]);
-    free(commandCharPArray);
+    av_free(commandCharPArray[0]);
+    av_free(commandCharPArray);
 
     return lastReturnCode;
 }
@@ -114,7 +114,7 @@ extern int mobileffmpeg_system_execute(NSArray *arguments, NSMutableArray *comma
  * @return zero on successful execution, 255 on user cancel and non-zero on error
  */
 + (int)execute: (NSString*)command {
-    return [self execute:command delimiter:@" "];
+    return [self executeWithArguments: [self parseArguments: command]];
 }
 
 /**
@@ -201,6 +201,63 @@ extern int mobileffmpeg_system_execute(NSArray *arguments, NSMutableArray *comma
     char buildDate[10];
     sprintf(buildDate, "%d", MOBILE_FFMPEG_BUILD_DATE);
     return [NSString stringWithUTF8String:buildDate];
+}
+
+/**
+ * Parses the given command into arguments.
+ *
+ * @param command string command
+ * @return array of arguments
+ */
++ (NSArray*)parseArguments: (NSString*)command {
+    NSMutableArray *argumentArray = [[NSMutableArray alloc] init];
+    NSMutableString *currentArgument = [[NSMutableString alloc] init];
+
+    bool singleQuoteStarted = false;
+    bool doubleQuoteStarted = false;
+
+    for (int i = 0; i < command.length; i++) {
+        unichar previousChar;
+        if (i > 0) {
+            previousChar = [command characterAtIndex:(i - 1)];
+        } else {
+            previousChar = 0;
+        }
+        char currentChar = [command characterAtIndex:i];
+
+        if (currentChar == ' ') {
+            if (singleQuoteStarted || doubleQuoteStarted) {
+                [currentArgument appendFormat: @"%c", currentChar];
+            } else if ([currentArgument length] > 0) {
+                [argumentArray addObject: currentArgument];
+                currentArgument = [[NSMutableString alloc] init];
+            }
+        } else if (currentChar == '\'' && (previousChar == 0 || previousChar != '\\')) {
+            if (singleQuoteStarted) {
+                singleQuoteStarted = false;
+            } else if (doubleQuoteStarted) {
+                [currentArgument appendFormat: @"%c", currentChar];
+            } else {
+                singleQuoteStarted = true;
+            }
+        } else if (currentChar == '\"' && (previousChar == 0 || previousChar != '\\')) {
+            if (doubleQuoteStarted) {
+                doubleQuoteStarted = false;
+            } else if (singleQuoteStarted) {
+                [currentArgument appendFormat: @"%c", currentChar];
+            } else {
+                doubleQuoteStarted = true;
+            }
+        } else {
+            [currentArgument appendFormat: @"%c", currentChar];
+        }
+    }
+
+    if ([currentArgument length] > 0) {
+        [argumentArray addObject: currentArgument];
+    }
+
+    return argumentArray;
 }
 
 @end
