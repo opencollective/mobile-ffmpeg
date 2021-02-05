@@ -27,9 +27,7 @@
 #include "c-strcase.h"
 
 /* TLS Versions */
-
-static SYSTEM_CONFIG_OR_CONST
-version_entry_st sup_versions[] = {
+static const version_entry_st sup_versions[] = {
 	{.name = "SSL3.0",
 	 .id = GNUTLS_SSL3,
 	 .age = 0,
@@ -195,21 +193,6 @@ version_is_valid_for_session(gnutls_session_t session,
 		return 1;
 	}
 	return 0;
-}
-
-int _gnutls_version_mark_disabled(const char *name)
-{
-#ifndef DISABLE_SYSTEM_CONFIG
-	version_entry_st *p;
-
-	for (p = sup_versions; p->name != NULL; p++)
-		if (c_strcasecmp(p->name, name) == 0) {
-			p->supported = 0;
-			return 0;
-		}
-
-#endif
-	return GNUTLS_E_INVALID_REQUEST;
 }
 
 /* Return the priority of the provided version number */
@@ -457,11 +440,8 @@ const gnutls_protocol_t *gnutls_protocol_list(void)
 	if (supported_protocols[0] == 0) {
 		int i = 0;
 
-		for (p = sup_versions; p->name != NULL; p++) {
-			if (!p->supported)
-				continue;
+		for (p = sup_versions; p->name != NULL; p++)
 			supported_protocols[i++] = p->id;
-		}
 		supported_protocols[i++] = 0;
 	}
 

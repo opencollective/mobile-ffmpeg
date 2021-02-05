@@ -25,8 +25,6 @@
 
 #include <auth.h>
 
-#define MAX_FAKE_SALT_SEED_SIZE 64
-
 typedef struct gnutls_srp_client_credentials_st {
 	char *username;
 	char *password;
@@ -40,9 +38,7 @@ typedef struct gnutls_srp_server_credentials_st {
 	 * password files.
 	 */
 	gnutls_srp_server_credentials_function *pwd_callback;
-	unsigned char fake_salt_seed[MAX_FAKE_SALT_SEED_SIZE];
-	unsigned int fake_salt_seed_size;
-
+	gnutls_datum_t fake_salt_seed;
 	unsigned int fake_salt_length;
 } srp_server_cred_st;
 

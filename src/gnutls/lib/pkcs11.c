@@ -1617,13 +1617,7 @@ _pkcs11_traverse_tokens(find_func_t find_func, void *input,
 					 info, flags);
 			if (ret < 0) {
 				gnutls_assert();
-				pkcs11_close_session(&sinfo);
-
-				/* treat the error as fatal only if
-				 * the token requires login */
-				if (l_tinfo.flags & CKF_LOGIN_REQUIRED)
-					return ret;
-				continue;
+				return ret;
 			}
 
 			ret =

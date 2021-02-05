@@ -312,15 +312,15 @@ generate_vcxproj() {
             tag_content ApplicationType "Windows Store"
             tag_content ApplicationTypeRevision 8.1
         fi
-        if [ "${platforms[0]}" = "ARM64" ]; then
+        if [ $vs_ver -eq 15 ] && [ "${platforms[0]}" = "ARM64" ]; then
             # Require the first Visual Studio version to have ARM64 support.
             tag_content MinimumVisualStudioVersion 15.9
-        fi
-        if [ $vs_ver -eq 15 ] && [ "${platforms[0]}" = "ARM64" ]; then
+            # Require a Windows SDK that has ARM64 support rather than the
+            # default of 8.1.
             # Since VS 15 does not have a 'use latest SDK version' facility,
-            # specifically require the contemporaneous SDK with official ARM64
-            # support.
-            tag_content WindowsTargetPlatformVersion 10.0.17763.0
+            # set WindowsTargetPlatformVersion to the first official SDK
+            # version to have ARM64 support.
+            tag_content WindowsTargetPlatformVersion 10.0.17134.0
         fi
     close_tag PropertyGroup
 

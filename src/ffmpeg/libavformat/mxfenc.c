@@ -1944,7 +1944,8 @@ static int mxf_write_partition(AVFormatContext *s, int bodysid,
         index_byte_count = 80;
 
     if (index_byte_count) {
-        index_byte_count += 16 + 4; // add encoded ber4 length
+        // add encoded ber length
+        index_byte_count += 16 + klv_ber_length(index_byte_count);
         index_byte_count += klv_fill_size(index_byte_count);
     }
 
@@ -3148,8 +3149,7 @@ static int mxf_interleave_get_packet(AVFormatContext *s, AVPacket *out, AVPacket
     }
 }
 
-static int mxf_compare_timestamps(AVFormatContext *s, const AVPacket *next,
-                                                      const AVPacket *pkt)
+static int mxf_compare_timestamps(AVFormatContext *s, AVPacket *next, AVPacket *pkt)
 {
     MXFStreamContext *sc  = s->streams[pkt ->stream_index]->priv_data;
     MXFStreamContext *sc2 = s->streams[next->stream_index]->priv_data;

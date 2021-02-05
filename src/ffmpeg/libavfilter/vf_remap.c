@@ -47,12 +47,9 @@
 
 typedef struct RemapContext {
     const AVClass *class;
-    int format;
-
     int nb_planes;
     int nb_components;
     int step;
-
     FFFrameSync fs;
 
     int (*remap_slice)(AVFilterContext *ctx, void *arg, int jobnr, int nb_jobs);
@@ -62,9 +59,6 @@ typedef struct RemapContext {
 #define FLAGS AV_OPT_FLAG_FILTERING_PARAM|AV_OPT_FLAG_VIDEO_PARAM
 
 static const AVOption remap_options[] = {
-    { "format", "set output format", OFFSET(format), AV_OPT_TYPE_INT, {.i64=0}, 0, 1, FLAGS, "format" },
-        { "color",  "", 0, AV_OPT_TYPE_CONST, {.i64=0},   .flags = FLAGS, .unit = "format" },
-        { "gray",   "", 0, AV_OPT_TYPE_CONST, {.i64=1},   .flags = FLAGS, .unit = "format" },
     { NULL }
 };
 
@@ -79,7 +73,6 @@ typedef struct ThreadData {
 
 static int query_formats(AVFilterContext *ctx)
 {
-    RemapContext *s = ctx->priv;
     static const enum AVPixelFormat pix_fmts[] = {
         AV_PIX_FMT_YUVA444P,
         AV_PIX_FMT_YUV444P,
@@ -95,9 +88,6 @@ static int query_formats(AVFilterContext *ctx)
         AV_PIX_FMT_GBRAP10, AV_PIX_FMT_GBRAP12, AV_PIX_FMT_GBRAP16,
         AV_PIX_FMT_RGB48, AV_PIX_FMT_BGR48,
         AV_PIX_FMT_RGBA64, AV_PIX_FMT_BGRA64,
-        AV_PIX_FMT_NONE
-    };
-    static const enum AVPixelFormat gray_pix_fmts[] = {
         AV_PIX_FMT_GRAY8, AV_PIX_FMT_GRAY9,
         AV_PIX_FMT_GRAY10, AV_PIX_FMT_GRAY12,
         AV_PIX_FMT_GRAY14, AV_PIX_FMT_GRAY16,
@@ -110,7 +100,7 @@ static int query_formats(AVFilterContext *ctx)
     AVFilterFormats *pix_formats = NULL, *map_formats = NULL;
     int ret;
 
-    if (!(pix_formats = ff_make_format_list(s->format ? gray_pix_fmts : pix_fmts)) ||
+    if (!(pix_formats = ff_make_format_list(pix_fmts)) ||
         !(map_formats = ff_make_format_list(map_fmts))) {
         ret = AVERROR(ENOMEM);
         goto fail;
@@ -289,7 +279,7 @@ static int process_frame(FFFrameSync *fs)
         td.step = s->step;
         ctx->internal->execute(ctx, s->remap_slice, &td, NULL, FFMIN(outlink->h, ff_filter_get_nb_threads(ctx)));
     }
-    out->pts = av_rescale_q(s->fs.pts, s->fs.time_base, outlink->time_base);
+    out->pts = av_rescale_q(in->pts, s->fs.time_base, outlink->time_base);
 
     return ff_filter_frame(outlink, out);
 }
@@ -315,6 +305,7 @@ static int config_output(AVFilterLink *outlink)
 
     outlink->w = xlink->w;
     outlink->h = xlink->h;
+    outlink->time_base = srclink->time_base;
     outlink->sample_aspect_ratio = srclink->sample_aspect_ratio;
     outlink->frame_rate = srclink->frame_rate;
 
@@ -338,10 +329,7 @@ static int config_output(AVFilterLink *outlink)
     s->fs.opaque   = s;
     s->fs.on_event = process_frame;
 
-    ret = ff_framesync_configure(&s->fs);
-    outlink->time_base = s->fs.time_base;
-
-    return ret;
+    return ff_framesync_configure(&s->fs);
 }
 
 static int activate(AVFilterContext *ctx)

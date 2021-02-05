@@ -202,8 +202,6 @@ static av_cold int vaapi_encode_vp9_configure(AVCodecContext *avctx)
         priv->q_idx_idr = priv->q_idx_p = priv->q_idx_b = 100;
     }
 
-    ctx->roi_quant_range = VP9_MAX_QUANT;
-
     return 0;
 }
 

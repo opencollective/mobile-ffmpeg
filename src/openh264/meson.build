@@ -1,5 +1,5 @@
 project('openh264', ['c', 'cpp'],
-  version : '1.8.0',
+  version : '1.7.0',
   meson_version : '>= 0.43',
   default_options : [ 'warning_level=1',
                       'buildtype=debugoptimized' ])
@@ -45,7 +45,6 @@ cpu_family = host_machine.cpu_family()
 
 supported_arguments = cpp.get_supported_arguments([
   '-Wno-non-virtual-dtor',
-  '-Wno-class-memaccess',
   '-Wno-strict-aliasing'])
 
 add_project_arguments(supported_arguments, language: 'cpp')
@@ -112,7 +111,6 @@ libopenh264_shared = shared_library('openh264',
   install: true,
   soversion: major_version,
   version: meson.project_version(),
-  vs_module_defs: 'openh264.def',
   dependencies: deps)
 
 libopenh264_static = static_library('openh264',

@@ -34,8 +34,7 @@ bool EncodeDecodeTestBase::prepareEncDecParam (const EncodeDecodeFileParamBase E
   //for encoder
   //I420: 1(Y) + 1/4(U) + 1/4(V)
   int frameSize = EncDecFileParam.width * EncDecFileParam.height * 3 / 2;
-  if (-1 == buf_.SetLength(frameSize))
-    return false;
+  buf_.SetLength (frameSize);
   if (buf_.Length() != (size_t)frameSize) {
     printf ("buf_.Length() failed! frameSize = %d\n", frameSize);
     return false;

@@ -20,7 +20,7 @@
     AfterTargets="$(YASMAfterTargets)"
     Condition="'@(YASM)' != ''"
     DependsOnTargets="$(YASMDependsOn);ComputeYASMOutput"
-    Outputs="@(YASM->'$(ProjectDir)$(IntDir)%(Filename).obj')"
+    Outputs="@(YASM->'%(ObjectFile)')"
     Inputs="@(YASM);%(YASM.AdditionalDependencies);$(MSBuildProjectFile)">
     <ItemGroup
       Condition="'@(SelectedFiles)' != ''">
@@ -32,7 +32,7 @@
       <YASM_tlog
         Include="%(YASM.ObjectFile)"
         Condition="'%(YASM.ObjectFile)' != '' and '%(YASM.ExcludedFromBuild)' != 'true'">
-        <Source>@(YASM->'%(FullPath)', '|')</Source>
+        <Source>@(YASM, '|')</Source>
       </YASM_tlog>
     </ItemGroup>
     <Message
@@ -40,9 +40,8 @@
       Text="%(YASM.ExecutionDescription)" />
     <WriteLinesToFile
       Condition="'@(YASM_tlog)' != '' and '%(YASM_tlog.ExcludedFromBuild)' != 'true'"
-      File="$(TLogLocation)$(ProjectName).write.1.tlog"
-      Lines="^%(YASM_tlog.Source);@(YASM->'$(ProjectDir)$(IntDir)%(Filename).obj')"
-      Encoding="Unicode" />
+      File="$(IntDir)$(ProjectName).write.1.tlog"
+      Lines="^%(YASM_tlog.Source);@(YASM_tlog->'%(Fullpath)')" />
     <YASM
       Condition="'@(YASM)' != '' and '%(YASM.ExcludedFromBuild)' != 'true'"
       CommandLineTemplate="%(YASM.CommandLineTemplate)"

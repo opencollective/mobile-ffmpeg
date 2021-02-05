@@ -1046,7 +1046,7 @@ static int init_report(const char *env)
     return 0;
 }
 
-int opt_report(void *optctx, const char *opt, const char *arg)
+int opt_report(const char *opt)
 {
     return init_report(NULL);
 }

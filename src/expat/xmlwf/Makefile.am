@@ -56,4 +56,6 @@ EXTRA_DIST = \
     xmlfile.h \
     xmlmime.c \
     xmlmime.h \
-    xmltchar.h
+    xmltchar.h \
+    xmlurl.h \
+    xmlwin32url.cxx

@@ -30,7 +30,6 @@
 #include <datum.h>
 #include "errors.h"
 
-/* On error, @dat is not changed. */
 int
 _gnutls_set_datum(gnutls_datum_t * dat, const void *data, size_t data_size)
 {
@@ -40,11 +39,10 @@ _gnutls_set_datum(gnutls_datum_t * dat, const void *data, size_t data_size)
 		return 0;
 	}
 
-	unsigned char *m = gnutls_malloc(data_size);
-	if (!m)
+	dat->data = gnutls_malloc(data_size);
+	if (dat->data == NULL)
 		return GNUTLS_E_MEMORY_ERROR;
 
-	dat->data = m;
 	dat->size = data_size;
 	memcpy(dat->data, data, data_size);
 
@@ -53,22 +51,22 @@ _gnutls_set_datum(gnutls_datum_t * dat, const void *data, size_t data_size)
 
 /* ensures that the data set are null-terminated
  * The function always returns an allocated string in @dat on success.
- * On error, @dat is not changed.
  */
 int
 _gnutls_set_strdatum(gnutls_datum_t * dat, const void *data, size_t data_size)
 {
-	if (data == NULL)
-		return gnutls_assert_val(GNUTLS_E_ILLEGAL_PARAMETER);
+	if (data_size == 0 || data == NULL) {
+		dat->data = gnutls_calloc(1, 1);
+		dat->size = 0;
+		return 0;
+	}
 
-	unsigned char *m = gnutls_malloc(data_size + 1);
-	if (!m)
+	dat->data = gnutls_malloc(data_size+1);
+	if (dat->data == NULL)
 		return GNUTLS_E_MEMORY_ERROR;
 
-	dat->data = m;
 	dat->size = data_size;
-	if (data_size)
-		memcpy(dat->data, data, data_size);
+	memcpy(dat->data, data, data_size);
 	dat->data[data_size] = 0;
 
 	return 0;

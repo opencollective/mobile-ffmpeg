@@ -34,8 +34,6 @@
 #ifndef GNUTLS_LIB_NETTLE_GOST_STREEBOG_H
 #define GNUTLS_LIB_NETTLE_GOST_STREEBOG_H
 
-#include "config.h"
-
 #include <nettle/nettle-types.h>
 #include <nettle/nettle-meta.h>
 
@@ -43,7 +41,6 @@
 extern "C" {
 #endif
 
-#ifndef HAVE_NETTLE_STREEBOG512_UPDATE
 /* Name mangling */
 #define streebog256_init _gnutls_streebog256_init
 #define streebog256_digest _gnutls_streebog256_digest
@@ -100,7 +97,6 @@ streebog256_digest(struct streebog256_ctx *ctx,
 #define nettle_streebog512 _gnutls_streebog512
 extern const struct nettle_hash _gnutls_streebog256;
 extern const struct nettle_hash _gnutls_streebog512;
-#endif
 
 #ifdef __cplusplus
 }

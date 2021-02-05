@@ -32,8 +32,6 @@
 #include "config.h"
 #endif
 
-#ifndef HAVE_NETTLE_GOST28147_SET_KEY
-
 #include <gnutls_int.h>
 
 #include <string.h>
@@ -2367,4 +2365,3 @@ gost28147_encrypt_for_cfb(struct gost28147_ctx *ctx,
       ctx->key_count += GOST28147_BLOCK_SIZE;
     }
 }
-#endif

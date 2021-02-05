@@ -40,6 +40,7 @@ libexpat_la_LDFLAGS = \
     -version-info @LIBCURRENT@:@LIBREVISION@:@LIBAGE@
 
 libexpat_la_SOURCES = \
+    loadlibrary.c \
     xmlparse.c \
     xmltok.c \
     xmlrole.c

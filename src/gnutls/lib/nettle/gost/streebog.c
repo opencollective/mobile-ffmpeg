@@ -35,7 +35,6 @@
 # include "config.h"
 #endif
 
-#ifndef HAVE_NETTLE_STREEBOG512_UPDATE
 #include <gnutls_int.h>
 
 #include <stdlib.h>
@@ -1334,4 +1333,3 @@ streebog256_digest(struct streebog256_ctx *ctx,
       digest);
   streebog256_init(ctx);
 }
-#endif

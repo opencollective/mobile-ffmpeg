@@ -43,16 +43,8 @@
 
 namespace WelsCommon {
 
-namespace {
-
-CWelsLock& GetInitLock() {
-  static CWelsLock *initLock = new CWelsLock;
-  return *initLock;
-}
-
-}
-
 int32_t CWelsThreadPool::m_iRefCount = 0;
+CWelsLock CWelsThreadPool::m_cInitLock;
 int32_t CWelsThreadPool::m_iMaxThreadNum = DEFAULT_THREAD_NUM;
 CWelsThreadPool* CWelsThreadPool::m_pThreadPoolSelf = NULL;
 
@@ -70,7 +62,7 @@ CWelsThreadPool::~CWelsThreadPool() {
 }
 
 WELS_THREAD_ERROR_CODE CWelsThreadPool::SetThreadNum (int32_t iMaxThreadNum) {
-  CWelsAutoLock  cLock (GetInitLock());
+  CWelsAutoLock  cLock (m_cInitLock);
 
   if (m_iRefCount != 0) {
     return WELS_THREAD_ERROR_GENERAL;
@@ -85,7 +77,7 @@ WELS_THREAD_ERROR_CODE CWelsThreadPool::SetThreadNum (int32_t iMaxThreadNum) {
 
 
 CWelsThreadPool* CWelsThreadPool::AddReference() {
-  CWelsAutoLock  cLock (GetInitLock());
+  CWelsAutoLock  cLock (m_cInitLock);
   if (m_pThreadPoolSelf == NULL) {
     m_pThreadPoolSelf = new CWelsThreadPool();
     if (!m_pThreadPoolSelf) {
@@ -110,7 +102,7 @@ CWelsThreadPool* CWelsThreadPool::AddReference() {
 }
 
 void CWelsThreadPool::RemoveInstance() {
-  CWelsAutoLock  cLock (GetInitLock());
+  CWelsAutoLock  cLock (m_cInitLock);
   //fprintf(stdout, "m_iRefCount=%d\n", m_iRefCount);
   -- m_iRefCount;
   if (0 == m_iRefCount) {
@@ -126,7 +118,7 @@ void CWelsThreadPool::RemoveInstance() {
 
 
 bool CWelsThreadPool::IsReferenced() {
-  CWelsAutoLock  cLock (GetInitLock());
+  CWelsAutoLock  cLock (m_cInitLock);
   return (m_iRefCount > 0);
 }
 
@@ -378,3 +370,5 @@ void  CWelsThreadPool::ClearWaitedTasks() {
 }
 
 }
+
+

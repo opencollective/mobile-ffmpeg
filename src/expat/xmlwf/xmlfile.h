@@ -34,10 +34,15 @@
 #define XML_EXTERNAL_ENTITIES 02
 
 #ifdef XML_LARGE_SIZE
-#  define XML_FMT_INT_MOD "ll"
+#if defined(XML_USE_MSC_EXTENSIONS) && _MSC_VER < 1400
+#define XML_FMT_INT_MOD "I64"
 #else
-#  define XML_FMT_INT_MOD "l"
+#define XML_FMT_INT_MOD "ll"
+#endif
+#else
+#define XML_FMT_INT_MOD "l"
 #endif
 
-extern int XML_ProcessFile(XML_Parser parser, const XML_Char *filename,
+extern int XML_ProcessFile(XML_Parser parser,
+                           const XML_Char *filename,
                            unsigned flags);

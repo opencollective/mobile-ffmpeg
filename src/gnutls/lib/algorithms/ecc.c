@@ -30,16 +30,13 @@
 /* Supported ECC curves
  */
 
-static SYSTEM_CONFIG_OR_CONST
-gnutls_ecc_curve_entry_st ecc_curves[] = {
-#ifdef ENABLE_NON_SUITEB_CURVES
+static const gnutls_ecc_curve_entry_st ecc_curves[] = {
 	{
 	 .name = "SECP192R1",
 	 .oid = "1.2.840.10045.3.1.1",
 	 .id = GNUTLS_ECC_CURVE_SECP192R1,
 	 .pk = GNUTLS_PK_ECDSA,
 	 .size = 24,
-	 .supported = 1,
 	},
 	{
 	 .name = "SECP224R1",
@@ -47,16 +44,13 @@ gnutls_ecc_curve_entry_st ecc_curves[] = {
 	 .id = GNUTLS_ECC_CURVE_SECP224R1,
 	 .pk = GNUTLS_PK_ECDSA,
 	 .size = 28,
-	 .supported = 1,
 	},
-#endif
 	{
 	 .name = "SECP256R1",
 	 .oid = "1.2.840.10045.3.1.7",
 	 .id = GNUTLS_ECC_CURVE_SECP256R1,
 	 .pk = GNUTLS_PK_ECDSA,
 	 .size = 32,
-	 .supported = 1,
 	},
 	{
 	 .name = "SECP384R1",
@@ -64,7 +58,6 @@ gnutls_ecc_curve_entry_st ecc_curves[] = {
 	 .id = GNUTLS_ECC_CURVE_SECP384R1,
 	 .pk = GNUTLS_PK_ECDSA,
 	 .size = 48,
-	 .supported = 1,
 	},
 	{
 	 .name = "SECP521R1",
@@ -72,14 +65,12 @@ gnutls_ecc_curve_entry_st ecc_curves[] = {
 	 .id = GNUTLS_ECC_CURVE_SECP521R1,
 	 .pk = GNUTLS_PK_ECDSA,
 	 .size = 66,
-	 .supported = 1,
 	},
 	{
 	 .name = "X25519",
 	 .id = GNUTLS_ECC_CURVE_X25519,
 	 .pk = GNUTLS_PK_ECDH_X25519,
 	 .size = 32,
-	 .supported = 1,
 	},
 	{
 	 .name = "Ed25519",
@@ -87,10 +78,8 @@ gnutls_ecc_curve_entry_st ecc_curves[] = {
 	 .id = GNUTLS_ECC_CURVE_ED25519,
 	 .pk = GNUTLS_PK_EDDSA_ED25519,
 	 .size = 32,
-	 .sig_size = 64,
-	 .supported = 1,
+	 .sig_size = 64
 	},
-#if ENABLE_GOST
 	{
 	 .name = "CryptoPro-A",
 	 .oid = "1.2.643.2.2.35.1",
@@ -98,7 +87,6 @@ gnutls_ecc_curve_entry_st ecc_curves[] = {
 	 .pk = GNUTLS_PK_UNKNOWN,
 	 .size = 32,
 	 .gost_curve = 1,
-	 .supported = 1,
 	},
 	{
 	 .name = "CryptoPro-B",
@@ -107,7 +95,6 @@ gnutls_ecc_curve_entry_st ecc_curves[] = {
 	 .pk = GNUTLS_PK_UNKNOWN,
 	 .size = 32,
 	 .gost_curve = 1,
-	 .supported = 1,
 	},
 	{
 	 .name = "CryptoPro-C",
@@ -116,7 +103,6 @@ gnutls_ecc_curve_entry_st ecc_curves[] = {
 	 .pk = GNUTLS_PK_UNKNOWN,
 	 .size = 32,
 	 .gost_curve = 1,
-	 .supported = 1,
 	},
 	{
 	 .name = "CryptoPro-XchA",
@@ -125,7 +111,6 @@ gnutls_ecc_curve_entry_st ecc_curves[] = {
 	 .pk = GNUTLS_PK_UNKNOWN,
 	 .size = 32,
 	 .gost_curve = 1,
-	 .supported = 1,
 	},
 	{
 	 .name = "CryptoPro-XchB",
@@ -134,7 +119,6 @@ gnutls_ecc_curve_entry_st ecc_curves[] = {
 	 .pk = GNUTLS_PK_UNKNOWN,
 	 .size = 32,
 	 .gost_curve = 1,
-	 .supported = 1,
 	},
 	{
 	 .name = "TC26-512-A",
@@ -143,7 +127,6 @@ gnutls_ecc_curve_entry_st ecc_curves[] = {
 	 .pk = GNUTLS_PK_GOST_12_512,
 	 .size = 64,
 	 .gost_curve = 1,
-	 .supported = 1,
 	},
 	{
 	 .name = "TC26-512-B",
@@ -152,9 +135,7 @@ gnutls_ecc_curve_entry_st ecc_curves[] = {
 	 .pk = GNUTLS_PK_GOST_12_512,
 	 .size = 64,
 	 .gost_curve = 1,
-	 .supported = 1,
 	},
-#endif
 	{0, 0, 0}
 };
 
@@ -181,22 +162,13 @@ const gnutls_ecc_curve_t *gnutls_ecc_curve_list(void)
 		int i = 0;
 
 		GNUTLS_ECC_CURVE_LOOP(
-			if (p->supported && _gnutls_pk_curve_exists(p->id))
+			if (_gnutls_pk_curve_exists(p->id))
 				supported_curves[i++] = p->id;
 		);
 		supported_curves[i++] = 0;
 	}
 
 	return supported_curves;
-}
-
-unsigned _gnutls_ecc_curve_is_supported(gnutls_ecc_curve_t curve)
-{
-	GNUTLS_ECC_CURVE_LOOP(
-		if (p->id == curve && p->supported && _gnutls_pk_curve_exists(p->id))
-			return 1;
-	);
-	return 0;
 }
 
 /**
@@ -213,8 +185,7 @@ gnutls_ecc_curve_t gnutls_oid_to_ecc_curve(const char *oid)
 	gnutls_ecc_curve_t ret = GNUTLS_ECC_CURVE_INVALID;
 
 	GNUTLS_ECC_CURVE_LOOP(
-		if (p->oid != NULL && c_strcasecmp(p->oid, oid) == 0 && p->supported &&
-		    _gnutls_pk_curve_exists(p->id)) {
+		if (p->oid != NULL && c_strcasecmp(p->oid, oid) == 0 && _gnutls_pk_curve_exists(p->id)) {
 			ret = p->id;
 			break;
 		}
@@ -239,8 +210,7 @@ gnutls_ecc_curve_t gnutls_ecc_curve_get_id(const char *name)
 	gnutls_ecc_curve_t ret = GNUTLS_ECC_CURVE_INVALID;
 
 	GNUTLS_ECC_CURVE_LOOP(
-		if (c_strcasecmp(p->name, name) == 0 && p->supported &&
-		    _gnutls_pk_curve_exists(p->id)) {
+		if (c_strcasecmp(p->name, name) == 0 && _gnutls_pk_curve_exists(p->id)) {
 			ret = p->id;
 			break;
 		}
@@ -249,24 +219,10 @@ gnutls_ecc_curve_t gnutls_ecc_curve_get_id(const char *name)
 	return ret;
 }
 
-int _gnutls_ecc_curve_mark_disabled(const char *name)
-{
-	gnutls_ecc_curve_entry_st *p;
-
-	for(p = ecc_curves; p->name != NULL; p++) {
-		if (c_strcasecmp(p->name, name) == 0) {
-			p->supported = 0;
-			return 0;
-		}
-	}
-
-	return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
-}
-
 static int _gnutls_ecc_pk_compatible(const gnutls_ecc_curve_entry_st *p,
 				     gnutls_pk_algorithm_t pk)
 {
-	if (!p->supported || !_gnutls_pk_curve_exists(p->id))
+	if (!_gnutls_pk_curve_exists(p->id))
 		return 0;
 
 	if (pk == GNUTLS_PK_GOST_01 ||
@@ -415,7 +371,7 @@ gnutls_pk_algorithm_t gnutls_ecc_curve_get_pk(gnutls_ecc_curve_t curve)
 	int ret = GNUTLS_PK_UNKNOWN;
 
 	GNUTLS_ECC_CURVE_LOOP(
-		if (p->id == curve && p->supported) {
+		if (p->id == curve) {
 			ret = p->pk;
 			break;
 		}

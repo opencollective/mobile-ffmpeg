@@ -987,11 +987,10 @@ static int gxf_write_packet(AVFormatContext *s, AVPacket *pkt)
     return 0;
 }
 
-static int gxf_compare_field_nb(AVFormatContext *s, const AVPacket *next,
-                                                    const AVPacket *cur)
+static int gxf_compare_field_nb(AVFormatContext *s, AVPacket *next, AVPacket *cur)
 {
     GXFContext *gxf = s->priv_data;
-    const AVPacket *pkt[2] = { cur, next };
+    AVPacket *pkt[2] = { cur, next };
     int i, field_nb[2];
     GXFStreamContext *sc[2];
 

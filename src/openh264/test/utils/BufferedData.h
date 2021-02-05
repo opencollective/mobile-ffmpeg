@@ -36,8 +36,7 @@ class BufferedData {
     len = std::min (length_, len);
     memcpy (ptr, data_, len);
     memmove (data_, data_ + len, length_ - len);
-    if (-1 == SetLength (length_ - len))
-      return -1;
+    SetLength (length_ - len);
     return len;
   }
 
@@ -45,17 +44,12 @@ class BufferedData {
     length_ = 0;
   }
 
-  int SetLength (size_t newLen) {
+  void SetLength (size_t newLen) {
     if (EnsureCapacity (newLen)) {
       length_ = newLen;
     } else {
-      Clear();
-      //FAIL () << "unable to alloc memory in SetLength()";
-      std::cout << "unable to alloc memory in SetLength()" << std::endl;
-      return -1;
+      FAIL () << "unable to alloc memory in SetLength()";
     }
-
-    return 0;
   }
 
   size_t Length() const {

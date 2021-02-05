@@ -1,6 +1,6 @@
 /*
- * Copyright (C)2011-2012, 2014-2015, 2017, 2019 D. R. Commander.
- *                                               All Rights Reserved.
+ * Copyright (C)2011-2012, 2014-2015, 2017 D. R. Commander.
+ *                                         All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -44,14 +44,14 @@
 #define strncasecmp  strnicmp
 #endif
 
-#define THROW(action, message) { \
+#define _throw(action, message) { \
   printf("ERROR in line %d while %s:\n%s\n", __LINE__, action, message); \
   retval = -1;  goto bailout; \
 }
 
-#define THROW_TJ(action)  THROW(action, tjGetErrorStr2(tjInstance))
+#define _throwtj(action)  _throw(action, tjGetErrorStr2(tjInstance))
 
-#define THROW_UNIX(action)  THROW(action, strerror(errno))
+#define _throwunix(action)  _throw(action, strerror(errno))
 
 #define DEFAULT_SUBSAMP  TJSAMP_444
 #define DEFAULT_QUALITY  95
@@ -71,9 +71,9 @@ int numScalingFactors = 0;
 
 /* DCT filter example.  This produces a negative of the image. */
 
-static int customFilter(short *coeffs, tjregion arrayRegion,
-                        tjregion planeRegion, int componentIndex,
-                        int transformIndex, tjtransform *transform)
+int customFilter(short *coeffs, tjregion arrayRegion, tjregion planeRegion,
+                 int componentIndex, int transformIndex,
+                 tjtransform *transform)
 {
   int i;
 
@@ -84,7 +84,7 @@ static int customFilter(short *coeffs, tjregion arrayRegion,
 }
 
 
-static void usage(char *programName)
+void usage(char *programName)
 {
   int i;
 
@@ -172,7 +172,7 @@ int main(int argc, char **argv)
   tjhandle tjInstance = NULL;
 
   if ((scalingFactors = tjGetScalingFactors(&numScalingFactors)) == NULL)
-    THROW_TJ("getting scaling factors");
+    _throwtj("getting scaling factors");
   memset(&xform, 0, sizeof(tjtransform));
 
   if (argc < 3)
@@ -266,17 +266,17 @@ int main(int argc, char **argv)
 
     /* Read the JPEG file into memory. */
     if ((jpegFile = fopen(argv[1], "rb")) == NULL)
-      THROW_UNIX("opening input file");
+      _throwunix("opening input file");
     if (fseek(jpegFile, 0, SEEK_END) < 0 || ((size = ftell(jpegFile)) < 0) ||
         fseek(jpegFile, 0, SEEK_SET) < 0)
-      THROW_UNIX("determining input file size");
+      _throwunix("determining input file size");
     if (size == 0)
-      THROW("determining input file size", "Input file contains no data");
+      _throw("determining input file size", "Input file contains no data");
     jpegSize = (unsigned long)size;
     if ((jpegBuf = (unsigned char *)tjAlloc(jpegSize)) == NULL)
-      THROW_UNIX("allocating JPEG buffer");
+      _throwunix("allocating JPEG buffer");
     if (fread(jpegBuf, jpegSize, 1, jpegFile) < 1)
-      THROW_UNIX("reading input file");
+      _throwunix("reading input file");
     fclose(jpegFile);  jpegFile = NULL;
 
     if (doTransform) {
@@ -285,22 +285,22 @@ int main(int argc, char **argv)
       unsigned long dstSize = 0;
 
       if ((tjInstance = tjInitTransform()) == NULL)
-        THROW_TJ("initializing transformer");
+        _throwtj("initializing transformer");
       xform.options |= TJXOPT_TRIM;
       if (tjTransform(tjInstance, jpegBuf, jpegSize, 1, &dstBuf, &dstSize,
                       &xform, flags) < 0)
-        THROW_TJ("transforming input image");
+        _throwtj("transforming input image");
       tjFree(jpegBuf);
       jpegBuf = dstBuf;
       jpegSize = dstSize;
     } else {
       if ((tjInstance = tjInitDecompress()) == NULL)
-        THROW_TJ("initializing decompressor");
+        _throwtj("initializing decompressor");
     }
 
     if (tjDecompressHeader3(tjInstance, jpegBuf, jpegSize, &width, &height,
                             &inSubsamp, &inColorspace) < 0)
-      THROW_TJ("reading JPEG header");
+      _throwtj("reading JPEG header");
 
     printf("%s Image:  %d x %d pixels, %s subsampling, %s colorspace\n",
            (doTransform ? "Transformed" : "Input"), width, height,
@@ -312,9 +312,9 @@ int main(int argc, char **argv)
       /* Input image has been transformed, and no re-compression options
          have been selected.  Write the transformed image to disk and exit. */
       if ((jpegFile = fopen(argv[2], "wb")) == NULL)
-        THROW_UNIX("opening output file");
+        _throwunix("opening output file");
       if (fwrite(jpegBuf, jpegSize, 1, jpegFile) < 1)
-        THROW_UNIX("writing output file");
+        _throwunix("writing output file");
       fclose(jpegFile);  jpegFile = NULL;
       goto bailout;
     }
@@ -330,18 +330,18 @@ int main(int argc, char **argv)
     pixelFormat = TJPF_BGRX;
     if ((imgBuf = (unsigned char *)tjAlloc(width * height *
                                            tjPixelSize[pixelFormat])) == NULL)
-      THROW_UNIX("allocating uncompressed image buffer");
+      _throwunix("allocating uncompressed image buffer");
 
     if (tjDecompress2(tjInstance, jpegBuf, jpegSize, imgBuf, width, 0, height,
                       pixelFormat, flags) < 0)
-      THROW_TJ("decompressing JPEG image");
+      _throwtj("decompressing JPEG image");
     tjFree(jpegBuf);  jpegBuf = NULL;
     tjDestroy(tjInstance);  tjInstance = NULL;
   } else {
     /* Input image is not a JPEG image.  Load it into memory. */
     if ((imgBuf = tjLoadImage(argv[1], &width, 1, &height, &pixelFormat,
                               0)) == NULL)
-      THROW_TJ("loading input image");
+      _throwtj("loading input image");
     if (outSubsamp < 0) {
       if (pixelFormat == TJPF_GRAY)
         outSubsamp = TJSAMP_GRAY;
@@ -355,9 +355,8 @@ int main(int argc, char **argv)
 
   if (!strcasecmp(outFormat, "jpg")) {
     /* Output image format is JPEG.  Compress the uncompressed image. */
+    unsigned char *jpegBuf = NULL;  /* Dynamically allocate the JPEG buffer */
     unsigned long jpegSize = 0;
-
-    jpegBuf = NULL;  /* Dynamically allocate the JPEG buffer */
 
     if (outQual < 0)
       outQual = DEFAULT_QUALITY;
@@ -365,17 +364,17 @@ int main(int argc, char **argv)
            outQual);
 
     if ((tjInstance = tjInitCompress()) == NULL)
-      THROW_TJ("initializing compressor");
+      _throwtj("initializing compressor");
     if (tjCompress2(tjInstance, imgBuf, width, 0, height, pixelFormat,
                     &jpegBuf, &jpegSize, outSubsamp, outQual, flags) < 0)
-      THROW_TJ("compressing image");
+      _throwtj("compressing image");
     tjDestroy(tjInstance);  tjInstance = NULL;
 
     /* Write the JPEG image to disk. */
     if ((jpegFile = fopen(argv[2], "wb")) == NULL)
-      THROW_UNIX("opening output file");
+      _throwunix("opening output file");
     if (fwrite(jpegBuf, jpegSize, 1, jpegFile) < 1)
-      THROW_UNIX("writing output file");
+      _throwunix("writing output file");
     tjDestroy(tjInstance);  tjInstance = NULL;
     fclose(jpegFile);  jpegFile = NULL;
     tjFree(jpegBuf);  jpegBuf = NULL;
@@ -384,7 +383,7 @@ int main(int argc, char **argv)
        directly to disk. */
     printf("\n");
     if (tjSaveImage(argv[2], imgBuf, width, 0, height, pixelFormat, 0) < 0)
-      THROW_TJ("saving output image");
+      _throwtj("saving output image");
   }
 
 bailout:

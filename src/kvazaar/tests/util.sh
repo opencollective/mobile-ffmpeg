@@ -34,18 +34,9 @@ valgrind_test() {
 
     prepare "${dimensions}" "${frames}"
 
-    # If $KVZ_TEST_VALGRIND is defined and equal to "1", run the test with
-    # valgrind. Otherwise, run without valgrind.
-    if [ "${KVZ_TEST_VALGRIND:-0}" = '1' ]; then
-        valgrind='valgrind --leak-check=full --error-exitcode=1 --'
-    else
-        valgrind=''
-    fi
-
-    # No quotes for $valgrind because it expands to multiple (or zero)
-    # arguments.
     print_and_run \
-        libtool execute $valgrind \
+        libtool execute \
+            valgrind --leak-check=full --error-exitcode=1 -- \
             ../src/kvazaar -i "${yuvfile}" "--input-res=${dimensions}" -o "${hevcfile}" "$@"
 
     print_and_run \

@@ -575,11 +575,10 @@ static av_cold int aom_init(AVCodecContext *avctx,
         if (enccfg.rc_end_usage == AOM_CQ) {
             enccfg.rc_target_bitrate = 1000000;
         } else {
-            enccfg.rc_end_usage = AOM_Q;
-            ctx->crf = 32;
+            avctx->bit_rate = enccfg.rc_target_bitrate * 1000;
             av_log(avctx, AV_LOG_WARNING,
-                   "Neither bitrate nor constrained quality specified, using default CRF of %d\n",
-                   ctx->crf);
+                   "Neither bitrate nor constrained quality specified, using default bitrate of %dkbit/sec\n",
+                   enccfg.rc_target_bitrate);
         }
     }
 
@@ -1092,7 +1091,7 @@ static const AVOption options[] = {
 };
 
 static const AVCodecDefault defaults[] = {
-    { "b",                 "0" },
+    { "b",          "256*1000" },
     { "qmin",             "-1" },
     { "qmax",             "-1" },
     { "g",                "-1" },

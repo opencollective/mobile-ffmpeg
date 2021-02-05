@@ -357,8 +357,7 @@ int ff_cbs_write_packet(CodedBitstreamContext *ctx,
     if (!buf)
         return AVERROR(ENOMEM);
 
-    av_buffer_unref(&pkt->buf);
-
+    av_init_packet(pkt);
     pkt->buf  = buf;
     pkt->data = frag->data;
     pkt->size = frag->data_size;
@@ -597,7 +596,7 @@ int ff_cbs_alloc_unit_content(CodedBitstreamContext *ctx,
         return AVERROR(ENOMEM);
 
     unit->content_ref = av_buffer_create(unit->content, size,
-                                         free, NULL, 0);
+                                         free, ctx, 0);
     if (!unit->content_ref) {
         av_freep(&unit->content);
         return AVERROR(ENOMEM);
@@ -737,12 +736,12 @@ int ff_cbs_insert_unit_data(CodedBitstreamContext *ctx,
     return 0;
 }
 
-void ff_cbs_delete_unit(CodedBitstreamContext *ctx,
-                        CodedBitstreamFragment *frag,
-                        int position)
+int ff_cbs_delete_unit(CodedBitstreamContext *ctx,
+                       CodedBitstreamFragment *frag,
+                       int position)
 {
-    av_assert0(0 <= position && position < frag->nb_units
-                             && "Unit to be deleted not in fragment.");
+    if (position < 0 || position >= frag->nb_units)
+        return AVERROR(EINVAL);
 
     cbs_unit_uninit(ctx, &frag->units[position]);
 
@@ -752,4 +751,6 @@ void ff_cbs_delete_unit(CodedBitstreamContext *ctx,
         memmove(frag->units + position,
                 frag->units + position + 1,
                 (frag->nb_units - position) * sizeof(*frag->units));
+
+    return 0;
 }

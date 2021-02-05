@@ -116,7 +116,7 @@ static int subfile_read(URLContext *h, unsigned char *buf, int size)
 static int64_t subfile_seek(URLContext *h, int64_t pos, int whence)
 {
     SubfileContext *c = h->priv_data;
-    int64_t new_pos, end;
+    int64_t new_pos = -1, end;
     int ret;
 
     if (whence == AVSEEK_SIZE || whence == SEEK_END) {
@@ -132,10 +132,10 @@ static int64_t subfile_seek(URLContext *h, int64_t pos, int whence)
         new_pos = c->start + pos;
         break;
     case SEEK_CUR:
-        new_pos = c->pos + pos;
+        new_pos += pos;
         break;
     case SEEK_END:
-        new_pos = end + pos;
+        new_pos = end + c->pos;
         break;
     }
     if (new_pos < c->start)

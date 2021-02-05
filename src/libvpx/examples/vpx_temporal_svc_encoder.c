@@ -19,7 +19,6 @@
 #include <string.h>
 
 #include "./vpx_config.h"
-#include "./y4minput.h"
 #include "../vpx_ports/vpx_timer.h"
 #include "vpx/vp8cx.h"
 #include "vpx/vpx_encoder.h"
@@ -30,7 +29,7 @@
 
 #define ROI_MAP 0
 
-#define zero(Dest) memset(&(Dest), 0, sizeof(Dest));
+#define zero(Dest) memset(&Dest, 0, sizeof(Dest));
 
 static const char *exec_name;
 
@@ -93,15 +92,14 @@ struct RateControlMetrics {
 // in the stream.
 static void set_rate_control_metrics(struct RateControlMetrics *rc,
                                      vpx_codec_enc_cfg_t *cfg) {
-  int i = 0;
+  unsigned int i = 0;
   // Set the layer (cumulative) framerate and the target layer (non-cumulative)
   // per-frame-bandwidth, for the rate control encoding stats below.
   const double framerate = cfg->g_timebase.den / cfg->g_timebase.num;
-  const int ts_number_layers = cfg->ts_number_layers;
   rc->layer_framerate[0] = framerate / cfg->ts_rate_decimator[0];
   rc->layer_pfb[0] =
       1000.0 * rc->layer_target_bitrate[0] / rc->layer_framerate[0];
-  for (i = 0; i < ts_number_layers; ++i) {
+  for (i = 0; i < cfg->ts_number_layers; ++i) {
     if (i > 0) {
       rc->layer_framerate[i] = framerate / cfg->ts_rate_decimator[i];
       rc->layer_pfb[i] =
@@ -120,9 +118,6 @@ static void set_rate_control_metrics(struct RateControlMetrics *rc,
   rc->window_size = 15;
   rc->avg_st_encoding_bitrate = 0.0;
   rc->variance_st_encoding_bitrate = 0.0;
-  // Target bandwidth for the whole stream.
-  // Set to layer_target_bitrate for highest layer (total bitrate).
-  cfg->rc_target_bitrate = rc->layer_target_bitrate[ts_number_layers - 1];
 }
 
 static void printout_rate_control_summary(struct RateControlMetrics *rc,
@@ -599,7 +594,7 @@ int main(int argc, char **argv) {
 #endif
   vpx_svc_layer_id_t layer_id;
   const VpxInterface *encoder = NULL;
-  struct VpxInputContext input_ctx;
+  FILE *infile = NULL;
   struct RateControlMetrics rc;
   int64_t cx_time = 0;
   const int min_args_base = 13;
@@ -616,13 +611,6 @@ int main(int argc, char **argv) {
 
   zero(rc.layer_target_bitrate);
   memset(&layer_id, 0, sizeof(vpx_svc_layer_id_t));
-  memset(&input_ctx, 0, sizeof(input_ctx));
-  /* Setup default input stream settings */
-  input_ctx.framerate.numerator = 30;
-  input_ctx.framerate.denominator = 1;
-  input_ctx.only_i420 = 1;
-  input_ctx.bit_depth = 0;
-
   exec_name = argv[0];
   // Check usage and arguments.
   if (argc < min_args) {
@@ -661,9 +649,6 @@ int main(int argc, char **argv) {
     die("Invalid number of arguments");
   }
 
-  input_ctx.filename = argv[1];
-  open_input_file(&input_ctx);
-
 #if CONFIG_VP9_HIGHBITDEPTH
   switch (strtol(argv[argc - 1], NULL, 0)) {
     case 8:
@@ -680,22 +665,14 @@ int main(int argc, char **argv) {
       break;
     default: die("Invalid bit depth (8, 10, 12) %s", argv[argc - 1]);
   }
-
-  // Y4M reader has its own allocation.
-  if (input_ctx.file_type != FILE_TYPE_Y4M) {
-    if (!vpx_img_alloc(
-            &raw,
-            bit_depth == VPX_BITS_8 ? VPX_IMG_FMT_I420 : VPX_IMG_FMT_I42016,
-            width, height, 32)) {
-      die("Failed to allocate image", width, height);
-    }
+  if (!vpx_img_alloc(
+          &raw, bit_depth == VPX_BITS_8 ? VPX_IMG_FMT_I420 : VPX_IMG_FMT_I42016,
+          width, height, 32)) {
+    die("Failed to allocate image", width, height);
   }
 #else
-  // Y4M reader has its own allocation.
-  if (input_ctx.file_type != FILE_TYPE_Y4M) {
-    if (!vpx_img_alloc(&raw, VPX_IMG_FMT_I420, width, height, 32)) {
-      die("Failed to allocate image", width, height);
-    }
+  if (!vpx_img_alloc(&raw, VPX_IMG_FMT_I420, width, height, 32)) {
+    die("Failed to allocate image", width, height);
   }
 #endif  // CONFIG_VP9_HIGHBITDEPTH
 
@@ -725,9 +702,6 @@ int main(int argc, char **argv) {
   speed = (int)strtol(argv[8], NULL, 0);
   if (speed < 0) {
     die("Invalid speed setting: must be positive");
-  }
-  if (strncmp(encoder->name, "vp9", 3) == 0 && speed > 9) {
-    warn("Mapping speed %d to speed 9.\n", speed);
   }
 
   for (i = min_args_base;
@@ -776,15 +750,13 @@ int main(int argc, char **argv) {
 
   set_rate_control_metrics(&rc, &cfg);
 
-  if (input_ctx.file_type == FILE_TYPE_Y4M) {
-    if (input_ctx.width != cfg.g_w || input_ctx.height != cfg.g_h) {
-      die("Incorrect width or height: %d x %d", cfg.g_w, cfg.g_h);
-    }
-    if (input_ctx.framerate.numerator != cfg.g_timebase.den ||
-        input_ctx.framerate.denominator != cfg.g_timebase.num) {
-      die("Incorrect framerate: numerator %d denominator %d",
-          cfg.g_timebase.num, cfg.g_timebase.den);
-    }
+  // Target bandwidth for the whole stream.
+  // Set to layer_target_bitrate for highest layer (total bitrate).
+  cfg.rc_target_bitrate = rc.layer_target_bitrate[cfg.ts_number_layers - 1];
+
+  // Open input file.
+  if (!(infile = fopen(argv[1], "rb"))) {
+    die("Failed to open %s for reading", argv[1]);
   }
 
   framerate = cfg.g_timebase.den / cfg.g_timebase.num;
@@ -893,7 +865,7 @@ int main(int argc, char **argv) {
     }
     flags = layer_flags[frame_cnt % flag_periodicity];
     if (layering_mode == 0) flags = 0;
-    frame_avail = read_frame(&input_ctx, &raw);
+    frame_avail = vpx_img_read(&raw, infile);
     if (frame_avail) ++rc.layer_input_frames[layer_id.temporal_layer_id];
     vpx_usec_timer_start(&timer);
     if (vpx_codec_encode(&codec, frame_avail ? &raw : NULL, pts, 1, flags,
@@ -961,7 +933,7 @@ int main(int argc, char **argv) {
     ++frame_cnt;
     pts += frame_duration;
   }
-  close_input_file(&input_ctx);
+  fclose(infile);
   printout_rate_control_summary(&rc, &cfg, frame_cnt);
   printf("\n");
   printf("Frame cnt and encoding time/FPS stats for encoding: %d %f %f \n",
@@ -973,10 +945,7 @@ int main(int argc, char **argv) {
   // Try to rewrite the output file headers with the actual frame count.
   for (i = 0; i < cfg.ts_number_layers; ++i) vpx_video_writer_close(outfile[i]);
 
-  if (input_ctx.file_type != FILE_TYPE_Y4M) {
-    vpx_img_free(&raw);
-  }
-
+  vpx_img_free(&raw);
 #if ROI_MAP
   free(roi.roi_map);
 #endif

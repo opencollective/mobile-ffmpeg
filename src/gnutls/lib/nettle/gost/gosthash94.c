@@ -34,7 +34,6 @@
 #include "config.h"
 #endif
 
-#ifndef HAVE_NETTLE_GOSTHASH94CP_UPDATE
 #include <gnutls_int.h>
 
 #include <string.h>
@@ -373,4 +372,3 @@ gosthash94cp_digest (struct gosthash94_ctx *ctx,
   gosthash94_write_digest (ctx, length, result,
 			   gost28147_param_CryptoPro_3411.sbox);
 }
-#endif

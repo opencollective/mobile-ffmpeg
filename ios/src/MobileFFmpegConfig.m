@@ -233,9 +233,6 @@ void mobileffmpeg_log_callback_function(void *ptr, int level, const char* format
     NSString *logData = [[NSString alloc] initWithFormat:[NSString stringWithCString:format encoding:NSUTF8StringEncoding] arguments:vargs];
 
     logCallbackDataAdd(level, logData);
-
-    // BUILDING LAST COMMAND OUTPUT AS EARLY AS POSSIBLE
-    [lastCommandOutput appendString:logData];
 }
 
 /**
@@ -284,6 +281,10 @@ void callbackBlockFunction() {
 
                             // LOG NEITHER PRINTED NOR FORWARDED
                         } else {
+
+                            // ALWAYS REDIRECT COMMAND OUTPUT
+                            [lastCommandOutput appendString:[callbackData getLogData]];
+
                             if (logDelegate != nil) {
 
                                 // FORWARD LOG TO DELEGATE

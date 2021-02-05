@@ -30,7 +30,7 @@ class BaseDecoderTest {
   BaseDecoderTest();
   int32_t SetUp();
   void TearDown();
-  bool DecodeFile (const char* fileName, Callback* cbk);
+  void DecodeFile (const char* fileName, Callback* cbk);
 
   bool Open (const char* fileName);
   bool DecodeNextFrame (Callback* cbk);
@@ -38,11 +38,10 @@ class BaseDecoderTest {
 
  private:
   void DecodeFrame (const uint8_t* src, size_t sliceSize, Callback* cbk);
-  void FlushFrame (Callback* cbk);
 
   std::ifstream file_;
   BufferedData buf_;
-  enum {\
+  enum {
     OpenFile,
     Decoding,
     EndOfStream,

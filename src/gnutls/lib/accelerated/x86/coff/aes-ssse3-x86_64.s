@@ -5,8 +5,8 @@
 ## By Mike Hamburg (Stanford University), 2009
 ## Public domain.
 ##
-## For details see http://shiftleft.org/papers/vector_aes/ and
-## http://crypto.stanford.edu/vpaes/.
+## For details see https://shiftleft.org/papers/vector_aes/ and
+## https://crypto.stanford.edu/vpaes/.
 #
 # *** This file is auto-generated ***
 #
@@ -30,7 +30,6 @@
 .def	_vpaes_encrypt_core;	.scl 3;	.type 32;	.endef
 .p2align	4
 _vpaes_encrypt_core:
-
 	movq	%rdx,%r9
 	movq	$16,%r11
 	movl	240(%rdx),%eax
@@ -118,11 +117,9 @@ _vpaes_encrypt_core:
 
 
 
-
 .def	_vpaes_decrypt_core;	.scl 3;	.type 32;	.endef
 .p2align	4
 _vpaes_decrypt_core:
-
 	movq	%rdx,%r9
 	movl	240(%rdx),%eax
 	movdqa	%xmm9,%xmm1
@@ -226,11 +223,9 @@ _vpaes_decrypt_core:
 
 
 
-
 .def	_vpaes_schedule_core;	.scl 3;	.type 32;	.endef
 .p2align	4
 _vpaes_schedule_core:
-
 
 
 
@@ -413,11 +408,9 @@ _vpaes_schedule_core:
 
 
 
-
 .def	_vpaes_schedule_192_smear;	.scl 3;	.type 32;	.endef
 .p2align	4
 _vpaes_schedule_192_smear:
-
 	pshufd	$0x80,%xmm6,%xmm1
 	pshufd	$0xFE,%xmm7,%xmm0
 	pxor	%xmm1,%xmm6
@@ -446,11 +439,9 @@ _vpaes_schedule_192_smear:
 
 
 
-
 .def	_vpaes_schedule_round;	.scl 3;	.type 32;	.endef
 .p2align	4
 _vpaes_schedule_round:
-
 
 	pxor	%xmm1,%xmm1
 .byte	102,65,15,58,15,200,15
@@ -515,11 +506,9 @@ _vpaes_schedule_low_round:
 
 
 
-
 .def	_vpaes_schedule_transform;	.scl 3;	.type 32;	.endef
 .p2align	4
 _vpaes_schedule_transform:
-
 	movdqa	%xmm9,%xmm1
 	pandn	%xmm0,%xmm1
 	psrld	$4,%xmm1
@@ -555,11 +544,9 @@ _vpaes_schedule_transform:
 
 
 
-
 .def	_vpaes_schedule_mangle;	.scl 3;	.type 32;	.endef
 .p2align	4
 _vpaes_schedule_mangle:
-
 	movdqa	%xmm0,%xmm4
 	movdqa	.Lk_mc_forward(%rip),%xmm5
 	testq	%rcx,%rcx
@@ -629,7 +616,6 @@ _vpaes_schedule_mangle:
 
 
 
-
 .globl	vpaes_set_encrypt_key
 .def	vpaes_set_encrypt_key;	.scl 2;	.type 32;	.endef
 .p2align	4
@@ -641,7 +627,6 @@ vpaes_set_encrypt_key:
 	movq	%rcx,%rdi
 	movq	%rdx,%rsi
 	movq	%r8,%rdx
-
 
 	leaq	-184(%rsp),%rsp
 	movaps	%xmm6,16(%rsp)
@@ -679,7 +664,6 @@ vpaes_set_encrypt_key:
 	movq	8(%rsp),%rdi
 	movq	16(%rsp),%rsi
 	.byte	0xf3,0xc3
-
 .LSEH_end_vpaes_set_encrypt_key:
 
 .globl	vpaes_set_decrypt_key
@@ -693,7 +677,6 @@ vpaes_set_decrypt_key:
 	movq	%rcx,%rdi
 	movq	%rdx,%rsi
 	movq	%r8,%rdx
-
 
 	leaq	-184(%rsp),%rsp
 	movaps	%xmm6,16(%rsp)
@@ -736,7 +719,6 @@ vpaes_set_decrypt_key:
 	movq	8(%rsp),%rdi
 	movq	16(%rsp),%rsi
 	.byte	0xf3,0xc3
-
 .LSEH_end_vpaes_set_decrypt_key:
 
 .globl	vpaes_encrypt
@@ -750,7 +732,6 @@ vpaes_encrypt:
 	movq	%rcx,%rdi
 	movq	%rdx,%rsi
 	movq	%r8,%rdx
-
 
 	leaq	-184(%rsp),%rsp
 	movaps	%xmm6,16(%rsp)
@@ -783,7 +764,6 @@ vpaes_encrypt:
 	movq	8(%rsp),%rdi
 	movq	16(%rsp),%rsi
 	.byte	0xf3,0xc3
-
 .LSEH_end_vpaes_encrypt:
 
 .globl	vpaes_decrypt
@@ -797,7 +777,6 @@ vpaes_decrypt:
 	movq	%rcx,%rdi
 	movq	%rdx,%rsi
 	movq	%r8,%rdx
-
 
 	leaq	-184(%rsp),%rsp
 	movaps	%xmm6,16(%rsp)
@@ -830,7 +809,6 @@ vpaes_decrypt:
 	movq	8(%rsp),%rdi
 	movq	16(%rsp),%rsi
 	.byte	0xf3,0xc3
-
 .LSEH_end_vpaes_decrypt:
 .globl	vpaes_cbc_encrypt
 .def	vpaes_cbc_encrypt;	.scl 2;	.type 32;	.endef
@@ -846,7 +824,6 @@ vpaes_cbc_encrypt:
 	movq	%r9,%rcx
 	movq	40(%rsp),%r8
 	movq	48(%rsp),%r9
-
 
 	xchgq	%rcx,%rdx
 	subq	$16,%rcx
@@ -909,7 +886,6 @@ vpaes_cbc_encrypt:
 	movq	8(%rsp),%rdi
 	movq	16(%rsp),%rsi
 	.byte	0xf3,0xc3
-
 .LSEH_end_vpaes_cbc_encrypt:
 
 
@@ -920,7 +896,6 @@ vpaes_cbc_encrypt:
 .def	_vpaes_preheat;	.scl 3;	.type 32;	.endef
 .p2align	4
 _vpaes_preheat:
-
 	leaq	.Lk_s0F(%rip),%r10
 	movdqa	-32(%r10),%xmm10
 	movdqa	-16(%r10),%xmm11
@@ -930,7 +905,6 @@ _vpaes_preheat:
 	movdqa	80(%r10),%xmm15
 	movdqa	96(%r10),%xmm14
 	.byte	0xf3,0xc3
-
 
 
 

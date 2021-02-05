@@ -136,7 +136,7 @@ static int process_frame(FFFrameSync *fs)
         ctx->internal->execute(ctx, filter_slice, &td, NULL,
                                FFMIN(s->height[2], ff_filter_get_nb_threads(ctx)));
     }
-    out->pts = av_rescale_q(s->fs.pts, s->fs.time_base, outlink->time_base);
+    out->pts = av_rescale_q(base->pts, s->fs.time_base, outlink->time_base);
 
     return ff_filter_frame(outlink, out);
 }
@@ -246,6 +246,7 @@ static int config_output(AVFilterLink *outlink)
 
     outlink->w = base->w;
     outlink->h = base->h;
+    outlink->time_base = base->time_base;
     outlink->sample_aspect_ratio = base->sample_aspect_ratio;
     outlink->frame_rate = base->frame_rate;
 
@@ -271,10 +272,7 @@ static int config_output(AVFilterLink *outlink)
     s->fs.opaque   = s;
     s->fs.on_event = process_frame;
 
-    ret = ff_framesync_configure(&s->fs);
-    outlink->time_base = s->fs.time_base;
-
-    return ret;
+    return ff_framesync_configure(&s->fs);
 }
 
 static int activate(AVFilterContext *ctx)

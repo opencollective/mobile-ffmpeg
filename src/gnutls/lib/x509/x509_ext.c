@@ -236,7 +236,8 @@ int gnutls_x509_ext_import_subject_alt_names(const gnutls_datum_t * ext,
 		goto cleanup;
 	}
 
-	for (i=0;;i++) {
+	i = 0;
+	do {
 		san.data = NULL;
 		san.size = 0;
 		othername_oid.data = NULL;
@@ -263,7 +264,9 @@ int gnutls_x509_ext_import_subject_alt_names(const gnutls_datum_t * ext,
 					    (char *)othername_oid.data, 1);
 		if (ret < 0)
 			break;
-	}
+
+		i++;
+	} while (ret >= 0);
 
 	sans->size = i;
 	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
@@ -913,7 +916,8 @@ int gnutls_x509_ext_import_authority_key_id(const gnutls_datum_t * ext,
 	}
 
 	/* Read authorityCertIssuer */
-	for (i=0;;i++) {
+	i = 0;
+	do {
 		san.data = NULL;
 		san.size = 0;
 		othername_oid.data = NULL;
@@ -940,7 +944,9 @@ int gnutls_x509_ext_import_authority_key_id(const gnutls_datum_t * ext,
 					    (char *)othername_oid.data, 1);
 		if (ret < 0)
 			break;
-	}
+
+		i++;
+	} while (ret >= 0);
 
 	aki->cert_issuer.size = i;
 	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE
@@ -2438,7 +2444,8 @@ int gnutls_x509_ext_import_crl_dist_points(const gnutls_datum_t * ext,
 		snprintf(name, sizeof(name),
 			 "?%u.distributionPoint.fullName", (unsigned)i + 1);
 
-		for (j=0;;j++) {
+		j = 0;
+		do {
 			san.data = NULL;
 			san.size = 0;
 
@@ -2457,7 +2464,9 @@ int gnutls_x509_ext_import_crl_dist_points(const gnutls_datum_t * ext,
 			if (ret < 0)
 				break;
 			san.data = NULL; /* it is now in cdp */
-		}
+
+			j++;
+		} while (ret >= 0);
 
 		i++;
 	} while (ret >= 0);

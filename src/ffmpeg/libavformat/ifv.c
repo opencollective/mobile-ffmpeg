@@ -68,8 +68,6 @@ static int read_index(AVFormatContext *s,
     }
 
     for (i = start_index; i < end_index; i++) {
-        if (avio_feof(s->pb))
-            return AVERROR_EOF;
         pos = avio_rl32(s->pb);
         size = avio_rl32(s->pb);
 
@@ -92,10 +90,7 @@ static int parse_header(AVFormatContext *s)
     uint32_t aud_magic;
     uint32_t vid_magic;
 
-    avio_skip(s->pb, 0x34);
-    avpriv_dict_set_timestamp(&s->metadata, "creation_time", avio_rl32(s->pb) * 1000000LL);
-    avio_skip(s->pb, 0x24);
-
+    avio_skip(s->pb, 0x5c);
     ifv->width = avio_rl16(s->pb);
     ifv->height = avio_rl16(s->pb);
 

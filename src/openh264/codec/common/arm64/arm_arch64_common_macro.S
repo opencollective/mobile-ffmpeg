@@ -52,17 +52,13 @@ ret
 .align 2
 .global \funcName
 .type \funcName, %function
-#ifndef __clang__
 .func \funcName
-#endif
 \funcName:
 .endm
 
 .macro WELS_ASM_AARCH64_FUNC_END
 ret
-#ifndef __clang__
 .endfunc
-#endif
 .endm
 
 #endif

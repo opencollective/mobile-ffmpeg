@@ -35,11 +35,7 @@
 #include <nettle/des.h>
 #include <nettle/version.h>
 #if ENABLE_GOST
-#ifndef HAVE_NETTLE_GOST28147_SET_KEY
 #include "gost/gost28147.h"
-#else
-#include <nettle/gost28147.h>
-#endif
 #endif
 #include <nettle/nettle-meta.h>
 #include <nettle/cbc.h>

@@ -33,8 +33,6 @@
 # include "config.h"
 #endif
 
-#ifndef HAVE_NETTLE_GOSTHASH94CP_UPDATE
-
 #include <gnutls_int.h>
 
 #include <nettle/nettle-meta.h>
@@ -43,5 +41,3 @@
 
 const struct nettle_hash nettle_gosthash94cp
 = _NETTLE_HASH(gosthash94cp, GOSTHASH94CP);
-
-#endif

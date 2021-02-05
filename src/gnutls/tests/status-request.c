@@ -51,6 +51,8 @@ int main()
 #include "cert-common.h"
 #include "utils.h"
 
+static void terminate(void);
+
 /* This program tests that the client does not send the
  * status request extension if GNUTLS_NO_EXTENSIONS is set.
  */
@@ -131,6 +133,7 @@ static void client(int fd, const char *prio)
 
 	if (ret < 0) {
 		fail("client: Handshake failed: %s\n", gnutls_strerror(ret));
+		terminate();
 	} else {
 		if (debug)
 			success("client: Handshake was completed\n");
@@ -155,6 +158,7 @@ static void client(int fd, const char *prio)
 		goto end;
 	} else if (ret < 0) {
 		fail("client: Error: %s\n", gnutls_strerror(ret));
+		terminate();
 	}
 
 	gnutls_bye(session, GNUTLS_SHUT_WR);
@@ -170,6 +174,15 @@ static void client(int fd, const char *prio)
 	gnutls_global_deinit();
 }
 
+
+/* These are global */
+pid_t child;
+
+static void terminate(void)
+{
+	kill(child, SIGTERM);
+	exit(1);
+}
 
 static void server(int fd, const char *prio)
 {
@@ -248,7 +261,6 @@ static void ch_handler(int sig)
 static
 void start(const char *prio)
 {
-	pid_t child;
 	int fd[2];
 	int ret, status = 0;
 

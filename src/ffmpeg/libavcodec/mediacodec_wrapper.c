@@ -392,6 +392,8 @@ char *ff_AMediaCodecList_getCodecNameByType(const char *mime, int profile, int e
     struct JNIAMediaCodecListFields jfields = { 0 };
     struct JNIAMediaFormatFields mediaformat_jfields = { 0 };
 
+    jobject format = NULL;
+    jobject codec = NULL;
     jobject codec_name = NULL;
 
     jobject info = NULL;
@@ -465,11 +467,6 @@ char *ff_AMediaCodecList_getCodecNameByType(const char *mime, int profile, int e
                 name = ff_jni_jstring_to_utf_chars(env, codec_name, log_ctx);
                 if (!name) {
                     goto done;
-                }
-
-                if (codec_name) {
-                    (*env)->DeleteLocalRef(env, codec_name);
-                    codec_name = NULL;
                 }
 
                 /* Skip software decoders */
@@ -569,6 +566,14 @@ done_with_info:
     }
 
 done:
+    if (format) {
+        (*env)->DeleteLocalRef(env, format);
+    }
+
+    if (codec) {
+        (*env)->DeleteLocalRef(env, codec);
+    }
+
     if (codec_name) {
         (*env)->DeleteLocalRef(env, codec_name);
     }
@@ -1332,10 +1337,6 @@ char *ff_AMediaCodec_getName(FFAMediaCodec *codec)
     ret = ff_jni_jstring_to_utf_chars(env, name, codec);
 
 fail:
-    if (name) {
-        (*env)->DeleteLocalRef(env, name);
-    }
-
     return ret;
 }
 

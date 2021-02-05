@@ -1,4 +1,4 @@
 /.deps/
 *.o
-/Makefile
 *.a
+/Makefile

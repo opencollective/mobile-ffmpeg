@@ -209,9 +209,8 @@ int ff_frame_thread_encoder_init(AVCodecContext *avctx, AVDictionary *options){
             int ret = av_opt_copy(thread_avctx->priv_data, avctx->priv_data);
             if (ret < 0)
                 goto fail;
-        } else if (avctx->codec->priv_data_size) {
+        } else
             memcpy(thread_avctx->priv_data, avctx->priv_data, avctx->codec->priv_data_size);
-        }
         thread_avctx->thread_count = 1;
         thread_avctx->active_thread_type &= ~FF_THREAD_FRAME;
 

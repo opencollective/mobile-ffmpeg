@@ -55,23 +55,22 @@ int kvz_strategy_register_dct(void* opaque, uint8_t bitdepth) {
 
 
 /**
- * \brief  Get a function that performs the transform for a block.
- *
- * \param width    Width of the region
- * \param color    Color plane
- * \param type     Prediction type
- *
- * \returns Pointer to the function.
- */
-dct_func * kvz_get_dct_func(int8_t width, color_t color, cu_type_t type)
+* \brief  Get a function that calculates SAD for NxN block.
+*
+* \param n  Width of the region for which SAD is calculated.
+*
+* \returns  Pointer to cost_16bit_nxn_func.
+*/
+dct_func * kvz_get_dct_func(int8_t width, int32_t mode)
 {
   switch (width) {
   case 4:
-    if (color == COLOR_Y && type == CU_INTRA) {
-      return kvz_fast_forward_dst_4x4;
-    } else {
+    switch (mode){
+    case 65535:
       return kvz_dct_4x4;
-    }
+    default:
+      return kvz_fast_forward_dst_4x4;
+  }
   case 8:
     return kvz_dct_8x8;
   case 16:
@@ -84,22 +83,21 @@ dct_func * kvz_get_dct_func(int8_t width, color_t color, cu_type_t type)
 }
 
 /**
- * \brief  Get a function that performs the inverse transform for a block.
- *
- * \param width    Width of the region
- * \param color    Color plane
- * \param type     Prediction type
- *
- * \returns Pointer to the function.
- */
-dct_func * kvz_get_idct_func(int8_t width, color_t color, cu_type_t type)
+* \brief  Get a function that calculates SAD for NxN block.
+*
+* \param n  Width of the region for which SAD is calculated.
+*
+* \returns  Pointer to cost_16bit_nxn_func.
+*/
+dct_func * kvz_get_idct_func(int8_t width, int32_t mode)
 {
   switch (width) {
   case 4:
-    if (color == COLOR_Y && type == CU_INTRA) {
-      return kvz_fast_inverse_dst_4x4;
-    } else {
+    switch (mode){
+    case 65535:
       return kvz_idct_4x4;
+    default:
+      return kvz_fast_inverse_dst_4x4;
     }
   case 8:
     return kvz_idct_8x8;

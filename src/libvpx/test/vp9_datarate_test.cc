@@ -242,18 +242,19 @@ class DatarateTestVP9RealTimeMultiBR
   }
 };
 
-// Params: speed setting and index for bitrate array.
+// Params: test mode, speed setting and index for bitrate array.
 class DatarateTestVP9LargeVBR
     : public DatarateTestVP9,
-      public ::libvpx_test::CodecTestWith2Params<int, int> {
+      public ::libvpx_test::CodecTestWith3Params<libvpx_test::TestMode, int,
+                                                 int> {
  public:
   DatarateTestVP9LargeVBR() : DatarateTestVP9(GET_PARAM(0)) {}
 
  protected:
   virtual void SetUp() {
     InitializeConfig();
-    SetMode(::libvpx_test::kRealTime);
-    set_cpu_used_ = GET_PARAM(1);
+    SetMode(GET_PARAM(1));
+    set_cpu_used_ = GET_PARAM(2);
     ResetModel();
   }
 };
@@ -270,7 +271,7 @@ TEST_P(DatarateTestVP9LargeVBR, BasicRateTargetingVBRLagZero) {
                                        30, 1, 0, 300);
 
   const int bitrates[2] = { 400, 800 };
-  const int bitrate_index = GET_PARAM(2);
+  const int bitrate_index = GET_PARAM(3);
   cfg_.rc_target_bitrate = bitrates[bitrate_index];
   ResetModel();
   ASSERT_NO_FATAL_FAILURE(RunLoop(&video));
@@ -297,7 +298,7 @@ TEST_P(DatarateTestVP9LargeVBR, BasicRateTargetingVBRLagNonZero) {
   ::libvpx_test::I420VideoSource video("hantro_collage_w352h288.yuv", 352, 288,
                                        30, 1, 0, 300);
   const int bitrates[2] = { 400, 800 };
-  const int bitrate_index = GET_PARAM(2);
+  const int bitrate_index = GET_PARAM(3);
   cfg_.rc_target_bitrate = bitrates[bitrate_index];
   ResetModel();
   ASSERT_NO_FATAL_FAILURE(RunLoop(&video));
@@ -326,7 +327,7 @@ TEST_P(DatarateTestVP9LargeVBR, BasicRateTargetingVBRLagNonZeroFrameParDecOff) {
   ::libvpx_test::I420VideoSource video("hantro_collage_w352h288.yuv", 352, 288,
                                        30, 1, 0, 300);
   const int bitrates[2] = { 400, 800 };
-  const int bitrate_index = GET_PARAM(2);
+  const int bitrate_index = GET_PARAM(3);
   cfg_.rc_target_bitrate = bitrates[bitrate_index];
   ResetModel();
   frame_parallel_decoding_mode_ = 0;
@@ -886,13 +887,15 @@ TEST_P(DatarateTestVP9RealTimeDenoiser, DenoiserOffOn) {
 VP9_INSTANTIATE_TEST_CASE(DatarateTestVP9RealTimeMultiBR,
                           ::testing::Range(5, 10), ::testing::Range(0, 4));
 
-VP9_INSTANTIATE_TEST_CASE(DatarateTestVP9LargeVBR, ::testing::Range(5, 9),
-                          ::testing::Range(0, 2));
+VP9_INSTANTIATE_TEST_CASE(DatarateTestVP9LargeVBR,
+                          ::testing::Values(::libvpx_test::kOnePassGood,
+                                            ::libvpx_test::kRealTime),
+                          ::testing::Range(2, 9), ::testing::Range(0, 2));
 
 VP9_INSTANTIATE_TEST_CASE(DatarateTestVP9RealTime, ::testing::Range(5, 10));
 
 VP9_INSTANTIATE_TEST_CASE(DatarateTestVP9PostEncodeDrop,
-                          ::testing::Range(5, 6));
+                          ::testing::Range(4, 5));
 
 #if CONFIG_VP9_TEMPORAL_DENOISING
 VP9_INSTANTIATE_TEST_CASE(DatarateTestVP9RealTimeDenoiser,

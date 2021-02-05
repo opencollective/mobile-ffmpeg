@@ -373,11 +373,9 @@ int ff_h264_build_ref_list(H264Context *h, H264SliceContext *sl)
                 av_assert0(0);
             }
 
-            if (i < 0 || mismatches_ref(h, ref)) {
+            if (i < 0) {
                 av_log(h->avctx, AV_LOG_ERROR,
-                       i < 0 ? "reference picture missing during reorder\n" :
-                               "mismatching reference\n"
-                      );
+                       "reference picture missing during reorder\n");
                 memset(&sl->ref_list[list][index], 0, sizeof(sl->ref_list[0][0])); // FIXME
             } else {
                 for (i = index; i + 1 < sl->ref_count[list]; i++) {

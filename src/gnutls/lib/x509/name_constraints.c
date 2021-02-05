@@ -116,7 +116,7 @@ int _gnutls_extract_name_constraints(ASN1_TYPE c2, const char *vstr,
 {
 	int ret;
 	char tmpstr[128];
-	unsigned indx;
+	unsigned indx = 0;
 	gnutls_datum_t tmp = { NULL, 0 };
 	unsigned int type;
 	struct name_constraints_node_st *nc, *prev;
@@ -127,7 +127,8 @@ int _gnutls_extract_name_constraints(ASN1_TYPE c2, const char *vstr,
 			prev = prev->next;
 	}
 
-	for (indx=1;;indx++) {
+	do {
+		indx++;
 		snprintf(tmpstr, sizeof(tmpstr), "%s.?%u.base", vstr, indx);
 
 		ret =
@@ -163,7 +164,7 @@ int _gnutls_extract_name_constraints(ASN1_TYPE c2, const char *vstr,
 		}
 
 		tmp.data = NULL;
-	}
+	} while (ret >= 0);
 
 	if (ret < 0 && ret != GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE) {
 		gnutls_assert();
@@ -1070,12 +1071,13 @@ static unsigned check_unsupported_constraint2(gnutls_x509_crt_t cert,
 	unsigned san_type;
 	int ret;
 
+	idx = 0;
 	found_one = 0;
 
-	for (idx=0;;idx++) {
+	do {
 		name_size = sizeof(name);
 		ret = gnutls_x509_crt_get_subject_alt_name2(cert,
-			idx, name, &name_size, &san_type, NULL);
+			idx++, name, &name_size, &san_type, NULL);
 		if (ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
 			break;
 		else if (ret < 0)
@@ -1086,7 +1088,7 @@ static unsigned check_unsupported_constraint2(gnutls_x509_crt_t cert,
 
 		found_one = 1;
 		break;
-	}
+	} while(ret >= 0);
 
 	if (found_one != 0)
 		return check_unsupported_constraint(nc, type);
@@ -1127,11 +1129,11 @@ unsigned found_one;
 		return 1; /* shortcut; no constraints to check */
 
 	if (type == GNUTLS_SAN_RFC822NAME) {
-		found_one = 0;
-		for (idx=0;;idx++) {
+		idx = found_one = 0;
+		do {
 			name_size = sizeof(name);
 			ret = gnutls_x509_crt_get_subject_alt_name2(cert,
-				idx, name, &name_size, &san_type, NULL);
+				idx++, name, &name_size, &san_type, NULL);
 			if (ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
 				break;
 			else if (ret < 0)
@@ -1147,7 +1149,7 @@ unsigned found_one;
 				&n);
 			if (t == 0)
 				return gnutls_assert_val(t);
-		}
+		} while(ret >= 0);
 
 		/* there is at least a single e-mail. That means that the EMAIL field will
 		 * not be used for verifying the identity of the holder. */
@@ -1188,11 +1190,11 @@ unsigned found_one;
 			return gnutls_assert_val(1);
 		}
 	} else if (type == GNUTLS_SAN_DNSNAME) {
-		found_one = 0;
-		for (idx=0;;idx++) {
+		idx = found_one = 0;
+		do {
 			name_size = sizeof(name);
 			ret = gnutls_x509_crt_get_subject_alt_name2(cert,
-				idx, name, &name_size, &san_type, NULL);
+				idx++, name, &name_size, &san_type, NULL);
 			if (ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
 				break;
 			else if (ret < 0)
@@ -1208,7 +1210,7 @@ unsigned found_one;
 				&n);
 			if (t == 0)
 				return gnutls_assert_val(t);
-		}
+		} while(ret >= 0);
 
 		/* there is at least a single DNS name. That means that the CN will
 		 * not be used for verifying the identity of the holder. */
@@ -1254,11 +1256,11 @@ unsigned found_one;
 			return gnutls_assert_val(1);
 		}
 	} else if (type == GNUTLS_SAN_IPADDRESS) {
-			found_one = 0;
-			for (idx=0;;idx++) {
+			idx = found_one = 0;
+			do {
 				name_size = sizeof(name);
 				ret = gnutls_x509_crt_get_subject_alt_name2(cert,
-					idx, name, &name_size, &san_type, NULL);
+					idx++, name, &name_size, &san_type, NULL);
 				if (ret == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
 					break;
 				else if (ret < 0)
@@ -1273,7 +1275,7 @@ unsigned found_one;
 				t = gnutls_x509_name_constraints_check(nc, GNUTLS_SAN_IPADDRESS, &n);
 				if (t == 0)
 					return gnutls_assert_val(t);
-			}
+			} while(ret >= 0);
 
 			/* there is at least a single IP address. */
 

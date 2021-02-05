@@ -62,10 +62,6 @@
 #ifndef GNUTLS_LIB_NETTLE_GOST_GOSTHASH94_H
 #define GNUTLS_LIB_NETTLE_GOST_GOSTHASH94_H
 
-#include "config.h"
-
-#ifndef HAVE_NETTLE_GOSTHASH94CP_UPDATE
-
 #include <nettle/nettle-types.h>
 
 #ifdef __cplusplus
@@ -94,8 +90,6 @@ extern const struct nettle_hash _gnutls_gosthash94cp;
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif
 
 #endif /* GNUTLS_LIB_NETTLE_GOST_GOSTHASH94_H */

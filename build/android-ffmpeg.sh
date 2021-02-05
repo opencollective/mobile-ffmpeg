@@ -406,7 +406,7 @@ if [[ -z ${NO_OUTPUT_REDIRECTION} ]]; then
     fi
 else
     echo -e "started\n"
-    make -j$(get_cpu_count) 1>>${BASEDIR}/build.log 2>&1
+    make -j$(get_cpu_count)
 
     if [ $? -ne 0 ]; then
         echo -n -e "\n${LIB_NAME}: failed\n"

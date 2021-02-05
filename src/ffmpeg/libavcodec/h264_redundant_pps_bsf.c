@@ -66,18 +66,19 @@ static int h264_redundant_pps_fixup_slice(H264RedundantPPSContext *ctx,
     return 0;
 }
 
-static int h264_redundant_pps_filter(AVBSFContext *bsf, AVPacket *pkt)
+static int h264_redundant_pps_filter(AVBSFContext *bsf, AVPacket *out)
 {
     H264RedundantPPSContext *ctx = bsf->priv_data;
+    AVPacket *in;
     CodedBitstreamFragment *au = &ctx->access_unit;
     int au_has_sps;
     int err, i;
 
-    err = ff_bsf_get_packet_ref(bsf, pkt);
+    err = ff_bsf_get_packet(bsf, &in);
     if (err < 0)
         return err;
 
-    err = ff_cbs_read_packet(ctx->input, au, pkt);
+    err = ff_cbs_read_packet(ctx->input, au, in);
     if (err < 0)
         goto fail;
 
@@ -93,10 +94,10 @@ static int h264_redundant_pps_filter(AVBSFContext *bsf, AVPacket *pkt)
                 goto fail;
             if (!au_has_sps) {
                 av_log(bsf, AV_LOG_VERBOSE, "Deleting redundant PPS "
-                       "at %"PRId64".\n", pkt->pts);
-                ff_cbs_delete_unit(ctx->input, au, i);
-                i--;
-                continue;
+                       "at %"PRId64".\n", in->pts);
+                err = ff_cbs_delete_unit(ctx->input, au, i);
+                if (err < 0)
+                    goto fail;
             }
         }
         if (nal->type == H264_NAL_SLICE ||
@@ -106,15 +107,21 @@ static int h264_redundant_pps_filter(AVBSFContext *bsf, AVPacket *pkt)
         }
     }
 
-    err = ff_cbs_write_packet(ctx->output, pkt, au);
+    err = ff_cbs_write_packet(ctx->output, out, au);
+    if (err < 0)
+        goto fail;
+
+
+    err = av_packet_copy_props(out, in);
     if (err < 0)
         goto fail;
 
     err = 0;
 fail:
     ff_cbs_fragment_reset(ctx->output, au);
+    av_packet_free(&in);
     if (err < 0)
-        av_packet_unref(pkt);
+        av_packet_unref(out);
 
     return err;
 }

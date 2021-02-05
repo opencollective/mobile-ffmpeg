@@ -305,11 +305,7 @@ gnutls_session_set_data(gnutls_session_t session,
 
 	if (session->internals.resumption_data.data != NULL)
 		gnutls_free(session->internals.resumption_data.data);
-	ret = _gnutls_set_datum(&session->internals.resumption_data, session_data, session_data_size);
-	if (ret < 0) {
-		gnutls_assert();
-		return ret;
-	}
+	_gnutls_set_datum(&session->internals.resumption_data, session_data, session_data_size);
 
 	return 0;
 }
@@ -413,16 +409,16 @@ char *gnutls_session_get_desc(gnutls_session_t session)
 			return NULL;
 		}
 
-		if ((kx == GNUTLS_KX_ECDHE_ECDSA || kx == GNUTLS_KX_ECDHE_RSA ||
-		    kx == GNUTLS_KX_ECDHE_PSK) && group_name) {
+		if (kx == GNUTLS_KX_ECDHE_ECDSA || kx == GNUTLS_KX_ECDHE_RSA || 
+		    kx == GNUTLS_KX_ECDHE_PSK) {
 			if (sign_str)
 				snprintf(kx_name, sizeof(kx_name), "(ECDHE-%s)-(%s)",
 					 group_name, sign_str);
 			else
 				snprintf(kx_name, sizeof(kx_name), "(ECDHE-%s)",
 					 group_name);
-		} else if ((kx == GNUTLS_KX_DHE_DSS || kx == GNUTLS_KX_DHE_RSA ||
-		    kx == GNUTLS_KX_DHE_PSK) && group_name) {
+		} else if (kx == GNUTLS_KX_DHE_DSS || kx == GNUTLS_KX_DHE_RSA || 
+		    kx == GNUTLS_KX_DHE_PSK) {
 			if (sign_str)
 				snprintf(kx_name, sizeof(kx_name), "(DHE-%s)-(%s)", group_name, sign_str);
 			else

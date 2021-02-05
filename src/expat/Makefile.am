@@ -54,19 +54,41 @@ pkgconfigdir = $(libdir)/pkgconfig
 
 
 _EXTRA_DIST_CMAKE = \
-    cmake/expat-config.cmake.in \
-    cmake/mingw-toolchain.cmake \
-    \
     CMakeLists.txt \
     CMake.README \
     ConfigureChecks.cmake \
     expat_config.h.cmake
 
 _EXTRA_DIST_WINDOWS = \
-    win32/build_expat_iss.bat \
+    examples/elements.vcxproj \
+    examples/elements.vcxproj.filters \
+    examples/outline.vcxproj \
+    examples/outline.vcxproj.filters \
+    \
+    lib/expat_static.vcxproj \
+    lib/expat_static.vcxproj.filters \
+    lib/expat.vcxproj \
+    lib/expat.vcxproj.filters \
+    lib/expatw_static.vcxproj \
+    lib/expatw_static.vcxproj.filters \
+    lib/expatw.vcxproj \
+    lib/expatw.vcxproj.filters \
+    \
+    tests/benchmark/benchmark.sln \
+    tests/benchmark/benchmark.vcxproj \
+    \
+    tests/runtests.sln \
+    tests/runtests.vcxproj \
+    tests/runtests.vcxproj.filters \
+    \
     win32/expat.iss \
     win32/MANIFEST.txt \
-    win32/README.txt
+    win32/README.txt \
+    \
+    xmlwf/xmlwf.vcxproj \
+    xmlwf/xmlwf.vcxproj.filters \
+    \
+    expat.sln
 
 EXTRA_DIST = \
     $(_EXTRA_DIST_CMAKE) \
@@ -76,13 +98,8 @@ EXTRA_DIST = \
     conftools/get-version.sh \
     conftools/PrintPath \
     \
-    xmlwf/xmlwf_helpgen.py \
-    xmlwf/xmlwf_helpgen.sh \
-    \
     Changes \
     README.md \
-    \
-    fix-xmltest-log.sh \
     test-driver-wrapper.sh
 
 
@@ -111,8 +128,7 @@ run-benchmark:
 	$(MAKE) -C tests/benchmark
 	./run.sh tests/benchmark/benchmark@EXEEXT@ -n $(top_srcdir)/../testdata/largefiles/recset.xml 65535 3
 
-.PHONY: download-xmlts-zip
-download-xmlts-zip:
+tests/xmlts.zip:
 	if test "$(XMLTS_ZIP)" = ""; then \
 		wget --output-document=tests/xmlts.zip \
 			https://www.w3.org/XML/Test/xmlts20080827.zip; \
@@ -120,26 +136,16 @@ download-xmlts-zip:
 		cp $(XMLTS_ZIP) tests/xmlts.zip; \
 	fi
 
-tests/xmlts.zip:
-	$(MAKE) download-xmlts-zip
-
-.PHONY: extract-xmlts-zip
-extract-xmlts-zip: tests/xmlts.zip
-	[ -f $(builddir)/tests/xmlts.zip ] || $(MAKE) download-xmlts-zip  # vpath workaround
-	cd tests && unzip -q xmlts.zip
-
 tests/xmlconf: tests/xmlts.zip
-	$(MAKE) extract-xmlts-zip
+	cd tests && unzip -q xmlts.zip
 
 .PHONY: run-xmltest
 run-xmltest: tests/xmlconf
 if WITH_XMLWF
-	[ -d $(builddir)/tests/xmlconf ] || $(MAKE) extract-xmlts-zip  # vpath workaround
-	$(MAKE) -C lib
 	$(MAKE) -C xmlwf
-	$(srcdir)/tests/xmltest.sh "$(abs_builddir)/run.sh $(abs_builddir)/xmlwf/xmlwf@EXEEXT@" 2>&1 | tee $(builddir)/tests/xmltest.log
-	$(srcdir)/fix-xmltest-log.sh $(builddir)/tests/xmltest.log
-	diff -u $(srcdir)/tests/xmltest.log.expected $(builddir)/tests/xmltest.log
+	tests/xmltest.sh "$(PWD)/run.sh $(PWD)/xmlwf/xmlwf@EXEEXT@" 2>&1 | tee tests/xmltest.log
+	dos2unix tests/xmltest.log
+	diff -u tests/xmltest.log.expected tests/xmltest.log
 else
 	@echo 'ERROR: xmlwf is needed for "make run-xmltest".' >&2
 	@echo 'ERROR: Please re-configure without --without-xmlwf.' >&2
@@ -148,7 +154,7 @@ endif
 
 .PHONY: qa
 qa:
-	QA_COMPILER=clang QA_SANITIZER=address   ./qa.sh
-	QA_COMPILER=clang QA_SANITIZER=memory    ./qa.sh
-	QA_COMPILER=clang QA_SANITIZER=undefined ./qa.sh
-	QA_COMPILER=gcc   QA_PROCESSOR=gcov      ./qa.sh
+	./qa.sh address
+	./qa.sh memory
+	./qa.sh undefined
+	./qa.sh coverage
