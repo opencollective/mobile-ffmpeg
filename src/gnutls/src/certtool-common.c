@@ -1287,7 +1287,9 @@ static void privkey_info_int(FILE *outfile, common_info_st * cinfo,
 			gnutls_free(q.data);
 			gnutls_free(g.data);
 		}
-	} else if (key_type == GNUTLS_PK_ECDSA || key_type == GNUTLS_PK_EDDSA_ED25519) {
+	} else if (key_type == GNUTLS_PK_ECDSA ||
+		   key_type == GNUTLS_PK_EDDSA_ED25519 ||
+		   key_type == GNUTLS_PK_EDDSA_ED448) {
 		gnutls_datum_t y, x, k;
 		gnutls_ecc_curve_t curve;
 
@@ -1382,12 +1384,12 @@ print_private_key(FILE *outfile, common_info_st * cinfo, gnutls_x509_privkey_t k
 
 	/* Only print private key parameters when an unencrypted
 	 * format is used */
-	if (cinfo->outtext)
-		privkey_info_int(outfile, cinfo, key);
-
 	switch_to_pkcs8_when_needed(cinfo, key, gnutls_x509_privkey_get_pk_algorithm(key));
 
 	if (!cinfo->pkcs8) {
+
+		if (cinfo->outtext)
+			privkey_info_int(outfile, cinfo, key);
 
 		size = lbuffer_size;
 		ret = gnutls_x509_privkey_export(key, cinfo->outcert_format,
@@ -1403,6 +1405,9 @@ print_private_key(FILE *outfile, common_info_st * cinfo, gnutls_x509_privkey_t k
 
 		pass = get_password(cinfo, &flags, 0);
 		flags |= cipher_to_flags(cinfo->pkcs_cipher);
+
+		if (cinfo->outtext && (flags & GNUTLS_PKCS_PLAIN))
+			privkey_info_int(outfile, cinfo, key);
 
 		size = lbuffer_size;
 		ret =
@@ -1638,6 +1643,8 @@ gnutls_pk_algorithm_t figure_key_type(const char *key_type)
 		return GNUTLS_PK_RSA_PSS;
 	else if (strcasecmp(key_type, "ed25519") == 0 || strcasecmp(key_type, "eddsa") == 0)
 		return GNUTLS_PK_EDDSA_ED25519;
+	else if (strcasecmp(key_type, "ed448") == 0)
+		return GNUTLS_PK_EDDSA_ED448;
 	else if (strcasecmp(key_type, "dsa") == 0)
 		return GNUTLS_PK_DSA;
 	else if (strcasecmp(key_type, "ecdsa") == 0 || strcasecmp(key_type, "ecc") == 0)

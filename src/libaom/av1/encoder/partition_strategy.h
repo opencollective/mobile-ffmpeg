@@ -53,12 +53,12 @@ void av1_simple_motion_search_based_split(
 // Performs a simple_motion_search with two reference frames and extract
 // the variance of residues. Then use the features to determine whether we want
 // to prune some partitions.
-void av1_simple_motion_search_prune_part(
-    AV1_COMP *const cpi, MACROBLOCK *x, PC_TREE *pc_tree, int mi_row,
-    int mi_col, BLOCK_SIZE bsize, int *partition_none_allowed,
-    int *partition_horz_allowed, int *partition_vert_allowed,
-    int *do_square_split, int *do_rectangular_split, int *prune_horz,
-    int *prune_vert);
+void av1_simple_motion_search_prune_rect(AV1_COMP *const cpi, MACROBLOCK *x,
+                                         PC_TREE *pc_tree, int mi_row,
+                                         int mi_col, BLOCK_SIZE bsize,
+                                         int *partition_horz_allowed,
+                                         int *partition_vert_allowed,
+                                         int *prune_horz, int *prune_vert);
 
 #if !CONFIG_REALTIME_ONLY
 // Early terminates PARTITION_NONE using simple_motion_search features and the
@@ -204,7 +204,8 @@ static INLINE int use_auto_max_partition(AV1_COMP *const cpi,
                  cpi->gf_group.index < cpi->gf_group.size));
   AV1_COMMON *const cm = &cpi->common;
   return !frame_is_intra_only(cm) &&
-         cpi->sf.auto_max_partition_based_on_simple_motion != NOT_IN_USE &&
+         cpi->sf.part_sf.auto_max_partition_based_on_simple_motion !=
+             NOT_IN_USE &&
          sb_size == BLOCK_128X128 && is_full_sb(cm, mi_row, mi_col, sb_size) &&
          cpi->gf_group.update_type[cpi->gf_group.index] != OVERLAY_UPDATE &&
          cpi->gf_group.update_type[cpi->gf_group.index] != INTNL_OVERLAY_UPDATE;

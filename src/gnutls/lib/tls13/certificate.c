@@ -273,7 +273,8 @@ int _gnutls13_send_certificate(gnutls_session_t session, unsigned again)
 #ifdef ENABLE_OCSP
 			if ((session->internals.selected_ocsp_length > 0 ||
 			     session->internals.selected_ocsp_func) &&
-			    _gnutls_hello_ext_is_present(session, GNUTLS_EXTENSION_STATUS_REQUEST)) {
+			     (((session->internals.hsk_flags & HSK_OCSP_REQUESTED) && IS_SERVER(session)) ||
+			     ((session->internals.hsk_flags & HSK_CLIENT_OCSP_REQUESTED) && !IS_SERVER(session)))) {
 				/* append status response if available */
 				ret = _gnutls_extv_append_init(&buf);
 				if (ret < 0) {
@@ -360,11 +361,12 @@ static int parse_cert_extension(void *_ctx, unsigned tls_id, const uint8_t *data
 static int
 parse_cert_list(gnutls_session_t session, uint8_t * data, size_t data_size)
 {
-	int len, ret;
+	int ret;
+	size_t len;
 	uint8_t *p = data;
 	cert_auth_info_t info;
 	gnutls_certificate_credentials_t cred;
-	ssize_t dsize = data_size, size;
+	size_t size;
 	int i;
 	unsigned npeer_certs, npeer_ocsp, j;
 	crt_cert_ctx_st ctx;
@@ -395,31 +397,31 @@ parse_cert_list(gnutls_session_t session, uint8_t * data, size_t data_size)
 	if (info == NULL)
 		return gnutls_assert_val(GNUTLS_E_INSUFFICIENT_CREDENTIALS);
 
-	DECR_LEN(dsize, 3);
+	DECR_LEN(data_size, 3);
 	size = _gnutls_read_uint24(p);
 	p += 3;
 
-	if (size != dsize)
+	if (size != data_size)
 		return gnutls_assert_val(GNUTLS_E_UNEXPECTED_PACKET_LENGTH);
 
 	if (size == 0)
 		return gnutls_assert_val(GNUTLS_E_NO_CERTIFICATE_FOUND);
 
-	i = dsize;
+	i = data_size;
 
 	while (i > 0) {
-		DECR_LEN(dsize, 3);
+		DECR_LEN(data_size, 3);
 		len = _gnutls_read_uint24(p);
 		if (len == 0)
 			return gnutls_assert_val(GNUTLS_E_UNEXPECTED_PACKET_LENGTH);
 
-		DECR_LEN(dsize, len);
+		DECR_LEN(data_size, len);
 		p += len + 3;
 		i -= len + 3;
 
-		DECR_LEN(dsize, 2);
+		DECR_LEN(data_size, 2);
 		len = _gnutls_read_uint16(p);
-		DECR_LEN(dsize, len);
+		DECR_LEN(data_size, len);
 
 		i -= len + 2;
 		p += len + 2;
@@ -427,7 +429,7 @@ parse_cert_list(gnutls_session_t session, uint8_t * data, size_t data_size)
 		nentries++;
 	}
 
-	if (dsize != 0)
+	if (data_size != 0)
 		return gnutls_assert_val(GNUTLS_E_UNEXPECTED_PACKET_LENGTH);
 
 	/* this is unnecessary - keeping to avoid a regression due to a re-org

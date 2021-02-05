@@ -27,7 +27,9 @@
 #include <stdlib.h>
 
 #include "cfg.h"
+#include "gop.h"
 #include "strategyselector.h"
+#include "kvz_math.h"
 
 
 /**
@@ -233,9 +235,25 @@ encoder_control_t* kvz_encoder_control_init(const kvz_config *const cfg)
 
   if (encoder->cfg.gop_len > 0) {
     if (encoder->cfg.gop_lowdelay) {
-      kvz_config_process_lp_gop(&encoder->cfg);
+      if (encoder->cfg.gop_len == 4 && encoder->cfg.ref_frames == 4) {
+        memcpy(encoder->cfg.gop, kvz_gop_lowdelay4, sizeof(kvz_gop_lowdelay4));
+      } else {
+        kvz_config_process_lp_gop(&encoder->cfg);
+      }
     }
+  } 
+  
+  if( encoder->cfg.intra_qp_offset_auto ) {
+      encoder->cfg.intra_qp_offset = encoder->cfg.gop_len > 1 ? -kvz_math_ceil_log2( encoder->cfg.gop_len ) + 1 : 0;
   }
+
+  // Disable GOP and QP offset for all-intra coding
+  if (encoder->cfg.intra_period == 1) {
+    encoder->cfg.gop_len = 0;
+    encoder->cfg.intra_qp_offset = 0;
+  }
+
+  encoder->poc_lsb_bits = MAX(4, kvz_math_ceil_log2(encoder->cfg.gop_len * 2 + 1));
 
   encoder->max_inter_ref_lcu.right = 1;
   encoder->max_inter_ref_lcu.down  = 1;
@@ -305,7 +323,7 @@ encoder_control_t* kvz_encoder_control_init(const kvz_config *const cfg)
   kvz_scalinglist_init(&encoder->scaling_list);
 
   // CQM
-  if (cfg->cqmfile) {
+  if (cfg->scaling_list == KVZ_SCALING_LIST_CUSTOM && cfg->cqmfile) {
     FILE* cqmfile = fopen(cfg->cqmfile, "rb");
     if (cqmfile) {
       kvz_scalinglist_parse(&encoder->scaling_list, cqmfile);
@@ -314,7 +332,12 @@ encoder_control_t* kvz_encoder_control_init(const kvz_config *const cfg)
       fprintf(stderr, "Could not open CQM file.\n");
       goto init_failed;
     }
+  } else if (cfg->scaling_list == KVZ_SCALING_LIST_DEFAULT) {
+    // Enable scaling lists if default lists are used
+    encoder->scaling_list.enable = 1;
+    encoder->scaling_list.use_default_list = 1;
   }
+
   kvz_scalinglist_process(&encoder->scaling_list, encoder->bitdepth);
 
   kvz_encoder_control_input_init(encoder, encoder->cfg.width, encoder->cfg.height);
@@ -327,7 +350,9 @@ encoder_control_t* kvz_encoder_control_init(const kvz_config *const cfg)
   }
   encoder->target_avg_bpp = encoder->target_avg_bppic / encoder->in.pixels_per_pic;
 
-  if (!encoder_control_init_gop_layer_weights(encoder)) {
+  if (encoder->cfg.target_bitrate > 0 &&
+      !encoder_control_init_gop_layer_weights(encoder))
+  {
     goto init_failed;
   }
 
@@ -347,13 +372,15 @@ encoder_control_t* kvz_encoder_control_init(const kvz_config *const cfg)
 
   }
 
-  encoder->lcu_dqp_enabled = cfg->target_bitrate > 0 || encoder->cfg.roi.dqps;
+  // NOTE: When tr_depth_inter is equal to 0, the transform is still split
+  // for SMP and AMP partition units.
+  encoder->tr_depth_inter = 0;
 
-  // When tr_depth_inter is equal to 0, inter transform split flag defaults
-  // to 1 for SMP and AMP partition units. We want to avoid the extra
-  // transform split so we set tr_depth_inter to 1 when SMP or AMP
-  // partition modes are enabled.
-  encoder->tr_depth_inter = (encoder->cfg.smp_enable || encoder->cfg.amp_enable) ? 1 : 0;
+  if (encoder->cfg.target_bitrate > 0 || encoder->cfg.roi.dqps || encoder->cfg.set_qp_in_cu || encoder->cfg.vaq) {
+    encoder->max_qp_delta_depth = 0;
+  } else {
+    encoder->max_qp_delta_depth = -1;
+  }
 
   //Tiles
   encoder->tiles_enable = encoder->cfg.tiles_width_count > 1 ||
@@ -585,11 +612,16 @@ encoder_control_t* kvz_encoder_control_init(const kvz_config *const cfg)
 #endif //KVZ_DEBUG
   }
 
-  assert(WITHIN(encoder->cfg.pu_depth_inter.min, PU_DEPTH_INTER_MIN, PU_DEPTH_INTER_MAX));
-  assert(WITHIN(encoder->cfg.pu_depth_inter.max, PU_DEPTH_INTER_MIN, PU_DEPTH_INTER_MAX));
-  assert(WITHIN(encoder->cfg.pu_depth_intra.min, PU_DEPTH_INTRA_MIN, PU_DEPTH_INTRA_MAX));
-  assert(WITHIN(encoder->cfg.pu_depth_intra.max, PU_DEPTH_INTRA_MIN, PU_DEPTH_INTRA_MAX));
+  for( size_t i = 0; i < KVZ_MAX_GOP_LAYERS; i++ )
+  {
+      if( encoder->cfg.pu_depth_inter.min[i] < 0 || cfg->pu_depth_inter.max[i] < 0 ) continue;
+      assert( WITHIN( encoder->cfg.pu_depth_inter.min[i], PU_DEPTH_INTER_MIN, PU_DEPTH_INTER_MAX ) );
+      assert( WITHIN( encoder->cfg.pu_depth_inter.max[i], PU_DEPTH_INTER_MIN, PU_DEPTH_INTER_MAX ) );
 
+      if( encoder->cfg.pu_depth_intra.min[i] < 0 || cfg->pu_depth_intra.max[i] < 0 ) continue;
+      assert( WITHIN( encoder->cfg.pu_depth_intra.min[i], PU_DEPTH_INTRA_MIN, PU_DEPTH_INTRA_MAX ) );
+      assert( WITHIN( encoder->cfg.pu_depth_intra.max[i], PU_DEPTH_INTRA_MIN, PU_DEPTH_INTRA_MAX ) );
+  }
   // Disable in-loop filters, sign hiding and transform skip when using
   // lossless coding.
   if (encoder->cfg.lossless) {
@@ -715,7 +747,8 @@ void kvz_encoder_control_input_init(encoder_control_t * const encoder,
  * \return 1 on success, 0 on failure.
  *
  * Selects appropriate weights for layers according to the target bpp.
- * Only GOP structures with exactly four layers are supported.
+ * Only GOP structures with exactly four layers are supported with the.
+ * exception of experimental GOP 16.
  */
 static int encoder_control_init_gop_layer_weights(encoder_control_t * const encoder)
 {
@@ -731,6 +764,7 @@ static int encoder_control_init_gop_layer_weights(encoder_control_t * const enco
   switch (num_layers) {
     case 0:
     case 1:
+      encoder->gop_layer_weights[0] = 1;
       break;
 
     // Use the first layers of the 4-layer weights.
@@ -787,10 +821,33 @@ static int encoder_control_init_gop_layer_weights(encoder_control_t * const enco
         }
       }
       break;
-
+    case 5:
+      if(!encoder->cfg.gop_lowdelay) {
+        // These are obtained by running HM with RA GOP 16 collecting the ratio of bits spent for each
+        // layer from the CTC sequences and then fitting power curve
+        encoder->gop_layer_weights[0] = 13.0060187535 * pow(encoder->target_avg_bpp, -0.3727651453);
+        encoder->gop_layer_weights[1] = 7.3654107392 * pow(encoder->target_avg_bpp, -0.0854329266);
+        encoder->gop_layer_weights[2] = 3.6563990701 * pow(encoder->target_avg_bpp, -0.0576990493);
+        encoder->gop_layer_weights[3] = 2.1486937288 * pow(encoder->target_avg_bpp, -0.0155389471);
+        encoder->gop_layer_weights[4] = 1;        
+      } 
+      else {
+        fprintf(stderr, "Unsupported amount of layers (%d) for lowdelay GOP\n", num_layers);
+        return 0;
+      }
+      break;
     default:
-      fprintf(stderr, "Unsupported number of GOP layers (%d)\n", num_layers);
-      return 0;
+      if (!encoder->cfg.gop_lowdelay && encoder->cfg.gop_len == 16) {
+        fprintf(stdout, 
+                "Rate control: Using experimental weights for GOP layers (%d)\n",
+                num_layers);
+        for (int i = 0; i < MAX_GOP_LAYERS; ++i) {
+          encoder->gop_layer_weights[i] = (i == 0) ? 10 : 2;
+        }
+      } else {
+        fprintf(stderr, "Unsupported number of GOP layers (%d)\n", num_layers);
+        return 0;
+      }
   }
 
   // Normalize weights so that the sum of weights in a GOP is one.

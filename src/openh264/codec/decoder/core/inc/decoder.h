@@ -59,6 +59,21 @@ int32_t DecoderConfigParam (PWelsDecoderContext pCtx, const SDecodingParam* kpPa
  */
 void WelsDecoderDefaults (PWelsDecoderContext pCtx, SLogContext* pLogCtx);
 
+/*
+* fill last decoded picture info
+*/
+void WelsDecoderLastDecPicInfoDefaults (SWelsLastDecPicInfo& sLastDecPicInfo);
+
+/*!
+* \brief   fill data fields in SPS and PPS default for decoder context
+*/
+void WelsDecoderSpsPpsDefaults (SWelsDecoderSpsPpsCTX& sSpsPpsCtx);
+
+/*!
+* \brief   copy SpsPps from one Ctx to another ctx for threaded code
+*/
+void CopySpsPps (PWelsDecoderContext pFromCtx, PWelsDecoderContext pToCtx);
+
 /*!
  *************************************************************************************
  * \brief   Initialize Wels decoder parameters and memory
@@ -111,7 +126,8 @@ int32_t WelsDecodeBs (PWelsDecoderContext pCtx, const uint8_t* kpBsBuf, const in
 /*
  *  request memory blocks for decoder avc part
  */
-int32_t WelsRequestMem (PWelsDecoderContext pCtx, const int32_t kiMbWidth, const int32_t kiMbHeight, bool& bReallocFlag);
+int32_t WelsRequestMem (PWelsDecoderContext pCtx, const int32_t kiMbWidth, const int32_t kiMbHeight,
+                        bool& bReallocFlag);
 
 
 /*
@@ -156,7 +172,11 @@ void UpdateDecStatNoFreezingInfo (PWelsDecoderContext pCtx);
 //update decoder statistics information
 void UpdateDecStat (PWelsDecoderContext pCtx, const bool kbOutput);
 //Destroy picutre buffer
-void DestroyPicBuff (PPicBuff* ppPicBuf, CMemoryAlign* pMa);
+void DestroyPicBuff (PWelsDecoderContext pCtx, PPicBuff* ppPicBuf, CMemoryAlign* pMa);
+//reset picture reodering buffer list
+void ResetReorderingPictureBuffers (PPictReoderingStatus pPictReoderingStatus, PPictInfo pPictInfo,
+                                    const bool& bFullReset);
+
 #ifdef __cplusplus
 }
 #endif//__cplusplus

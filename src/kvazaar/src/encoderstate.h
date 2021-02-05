@@ -39,6 +39,7 @@
 #include "videoframe.h"
 #include "extras/crypto.h"
 
+struct kvz_rc_data;
 
 typedef enum {
   ENCODER_STATE_TYPE_INVALID = 'i',
@@ -53,8 +54,12 @@ typedef struct lcu_stats_t {
   //! \brief Number of bits that were spent
   uint32_t bits;
 
+  uint32_t pixels;
+
   //! \brief Weight of the LCU for rate control
   double weight;
+
+  double original_weight;
 
   //! \brief Lambda value which was used for this LCU
   double lambda;
@@ -64,6 +69,11 @@ typedef struct lcu_stats_t {
 
   //! \brief Rate control beta parameter
   double rc_beta;
+  double distortion;
+  int i_cost;
+
+  int8_t qp;
+  uint8_t skipped;
 } lcu_stats_t;
 
 
@@ -111,6 +121,9 @@ typedef struct encoder_state_config_frame_t {
   //! Number of bits written in the current GOP.
   uint64_t cur_gop_bits_coded;
 
+  //! Number of bits written in the current frame.
+  uint64_t cur_frame_bits_coded;
+
   //! Number of bits targeted for the current GOP.
   double cur_gop_target_bits;
 
@@ -141,11 +154,27 @@ typedef struct encoder_state_config_frame_t {
    */
   lcu_stats_t *lcu_stats;
 
+  pthread_mutex_t rc_lock;
+
+  struct kvz_rc_data *new_ratecontrol;
+
+  struct encoder_state_t const *previous_layer_state;
+
+  /**
+  * \brief Calculated adaptive QP offset for each LCU.
+  */
+  double *aq_offsets;
+
   /**
    * \brief Whether next NAL is the first NAL in the access unit.
    */
   bool first_nal;
+  double icost;
+  double remaining_weight;
+  double i_bits_left;
 
+  double *c_para;
+  double *k_para;
 } encoder_state_config_frame_t;
 
 typedef struct encoder_state_config_tile_t {
@@ -236,7 +265,7 @@ typedef struct encoder_state_t {
   
   //Pointer to the encoder_state of the previous frame
   struct encoder_state_t *previous_encoder_state;
-  
+    
   encoder_state_config_frame_t  *frame;
   encoder_state_config_tile_t   *tile;
   encoder_state_config_slice_t  *slice;
@@ -268,10 +297,17 @@ typedef struct encoder_state_t {
   bool must_code_qp_delta;
 
   /**
-   * \brief Reference for computing QP delta for the next LCU that is coded
-   * next. Updated whenever a QP delta is coded.
+   * \brief QP value of the last CU in the last coded quantization group.
+   *
+   * A quantization group is a square of width
+   * (LCU_WIDTH >> encoder_control->max_qp_delta_depth). All CUs of in the
+   * same quantization group share the QP predictor value, but may have
+   * different QP values.
+   *
+   * Set to the frame QP at the beginning of a wavefront row or a tile and
+   * updated when the last CU of a quantization group is coded.
    */
-  int8_t ref_qp;
+  int8_t last_qp;
 
   /**
    * \brief Coeffs for the LCU.
@@ -281,6 +317,11 @@ typedef struct encoder_state_t {
   //Jobs to wait for
   threadqueue_job_t * tqj_recon_done; //Reconstruction is done
   threadqueue_job_t * tqj_bitstream_written; //Bitstream is written
+
+  //Constraint structure  
+  void * constraint;
+
+
 } encoder_state_t;
 
 void kvz_encode_one_frame(encoder_state_t * const state, kvz_picture* frame);
@@ -297,6 +338,8 @@ void kvz_encoder_create_ref_lists(const encoder_state_t *const state);
 lcu_stats_t* kvz_get_lcu_stats(encoder_state_t *state, int lcu_x, int lcu_y);
 
 
+int kvz_get_cu_ref_qp(const encoder_state_t *state, int x, int y, int last_qp);
+
 /**
  * Whether the parameter sets should be written with the current frame.
  */
@@ -308,6 +351,30 @@ static INLINE bool encoder_state_must_write_vps(const encoder_state_t *state)
   return (vps_period >  0 && frame % vps_period == 0) ||
          (vps_period >= 0 && frame == 0);
 }
+
+
+/**
+ * \brief Returns true if the CU is the last CU in its containing
+ * quantization group.
+ *
+ * \param state   encoder state
+ * \param x       x-coordinate of the left edge of the CU
+ * \param y       y-cooradinate of the top edge of the CU
+ * \param depth   depth in the CU tree
+ * \return true, if it's the last CU in its QG, otherwise false
+ */
+static INLINE bool is_last_cu_in_qg(const encoder_state_t *state, int x, int y, int depth)
+{
+  if (state->encoder_control->max_qp_delta_depth < 0) return false;
+
+  const int cu_width = LCU_WIDTH >> depth;
+  const int qg_width = LCU_WIDTH >> state->encoder_control->max_qp_delta_depth;
+  const int right  = x + cu_width;
+  const int bottom = y + cu_width;
+  return (right % qg_width == 0 || right >= state->tile->frame->width) &&
+         (bottom % qg_width == 0 || bottom >= state->tile->frame->height);
+}
+
 
 static const uint8_t g_group_idx[32] = {
   0, 1, 2, 3, 4, 4, 5, 5, 6, 6,

@@ -161,6 +161,8 @@
     [arch appendString:@"i386"];
 #elif MOBILE_FFMPEG_X86_64
     [arch appendString:@"x86_64"];
+#elif MOBILE_FFMPEG_X86_64_MAC_CATALYST
+    [arch appendString:@"x86_64_mac_catalyst"];
 #endif
 
     return arch;
@@ -169,7 +171,7 @@
 /**
  * Returns whether MobileFFmpeg release is a long term release or not.
  *
- * @return YES=1 or NO=0
+ * @return yes=1 or no=0
  */
 + (int)isLTSBuild {
     #if defined(MOBILE_FFMPEG_LTS)

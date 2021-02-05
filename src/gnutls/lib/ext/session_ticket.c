@@ -54,7 +54,12 @@ const hello_ext_entry_st ext_mod_session_ticket = {
 	.gid = GNUTLS_EXTENSION_SESSION_TICKET,
 	.validity = GNUTLS_EXT_FLAG_TLS | GNUTLS_EXT_FLAG_DTLS | GNUTLS_EXT_FLAG_CLIENT_HELLO |
 		    GNUTLS_EXT_FLAG_TLS12_SERVER_HELLO,
-	.parse_type = GNUTLS_EXT_TLS,
+	/* This extension must be parsed on session resumption as well; see
+	 * https://gitlab.com/gnutls/gnutls/issues/841 */
+	.client_parse_point = GNUTLS_EXT_MANDATORY,
+	/* on server side we want this parsed after normal handshake resumption
+	 * actions are complete */
+	.server_parse_point = GNUTLS_EXT_TLS,
 	.recv_func = session_ticket_recv_params,
 	.send_func = session_ticket_send_params,
 	.pack_func = session_ticket_pack,
@@ -78,7 +83,7 @@ static int
 unpack_ticket(const gnutls_datum_t *ticket_data, struct ticket_st *ticket)
 {
 	const uint8_t * data = ticket_data->data;
-	ssize_t data_size = ticket_data->size;
+	size_t data_size = ticket_data->size;
 	const uint8_t *encrypted_state;
 
 	/* Format:
@@ -136,7 +141,11 @@ pack_ticket(const struct ticket_st *ticket, gnutls_datum_t *ticket_data)
 	_gnutls_write_uint16(ticket->encrypted_state_len, p);
 	p += 2;
 
-	memcpy(p, ticket->encrypted_state, ticket->encrypted_state_len);
+	/* We use memmove instead of memcpy here because
+	 * ticket->encrypted_state is allocated from
+	 * ticket_data->data, and thus both memory areas may overlap.
+	 */
+	memmove(p, ticket->encrypted_state, ticket->encrypted_state_len);
 	p += ticket->encrypted_state_len;
 
 	memcpy(p, ticket->mac, TICKET_MAC_SIZE);
@@ -367,11 +376,10 @@ unpack_session(gnutls_session_t session, const gnutls_datum_t *state)
 
 static int
 session_ticket_recv_params(gnutls_session_t session,
-			   const uint8_t * data, size_t _data_size)
+			   const uint8_t * data, size_t data_size)
 {
 	gnutls_datum_t ticket_data;
 	gnutls_datum_t state;
-	ssize_t data_size = _data_size;
 	int ret;
 
 	if (session->internals.flags & GNUTLS_NO_TICKETS)

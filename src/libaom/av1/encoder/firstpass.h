@@ -30,6 +30,8 @@ extern "C" {
 
 #define VLOW_MOTION_THRESHOLD 950
 
+#define MAX_ARF_LAYERS 5
+
 typedef struct {
   // Frame number in display order, if stats are for a single frame.
   // No real meaning for a collection of frames.
@@ -99,17 +101,6 @@ typedef struct {
   double raw_error_stdev;
 } FIRSTPASS_STATS;
 
-enum {
-  KF_UPDATE,
-  LF_UPDATE,
-  GF_UPDATE,
-  ARF_UPDATE,
-  OVERLAY_UPDATE,
-  INTNL_OVERLAY_UPDATE,  // Internal Overlay Frame
-  INTNL_ARF_UPDATE,      // Internal Altref Frame
-  FRAME_UPDATE_TYPES
-} UENUM1BYTE(FRAME_UPDATE_TYPE);
-
 #define FC_ANIMATION_THRESH 0.15
 enum {
   FC_NORMAL = 0,
@@ -121,14 +112,16 @@ typedef struct {
   unsigned char index;
   FRAME_UPDATE_TYPE update_type[MAX_STATIC_GF_GROUP_LENGTH];
   unsigned char arf_src_offset[MAX_STATIC_GF_GROUP_LENGTH];
-  unsigned char arf_update_idx[MAX_STATIC_GF_GROUP_LENGTH];
-  unsigned char arf_pos_in_gf[MAX_STATIC_GF_GROUP_LENGTH];
   unsigned char frame_disp_idx[MAX_STATIC_GF_GROUP_LENGTH];
-  unsigned char pyramid_level[MAX_STATIC_GF_GROUP_LENGTH];
   int ref_frame_disp_idx[MAX_STATIC_GF_GROUP_LENGTH][REF_FRAMES];
   int ref_frame_gop_idx[MAX_STATIC_GF_GROUP_LENGTH][REF_FRAMES];
-  unsigned char pyramid_height;
-  unsigned char pyramid_lvl_nodes[MAX_PYRAMID_LVL];
+
+  // TODO(jingning): Unify the data structure used here after the new control
+  // mechanism is in place.
+  int layer_depth[MAX_STATIC_GF_GROUP_LENGTH];
+  int arf_boost[MAX_STATIC_GF_GROUP_LENGTH];
+  int max_layer_depth;
+  int max_layer_depth_allowed;
   // This is currently only populated for AOM_Q mode
   unsigned char q_val[MAX_STATIC_GF_GROUP_LENGTH];
   int bit_allocation[MAX_STATIC_GF_GROUP_LENGTH];
@@ -136,16 +129,21 @@ typedef struct {
 } GF_GROUP;
 
 typedef struct {
+  FIRSTPASS_STATS *stats_in_start;
+  FIRSTPASS_STATS *stats_in_end;
+  FIRSTPASS_STATS *stats_in_buf_end;
+} STATS_BUFFER_CTX;
+
+typedef struct {
   unsigned int section_intra_rating;
   FIRSTPASS_STATS total_stats;
   // Circular queue of first pass stats stored for most recent frames.
   // cpi->output_pkt_list[i].data.twopass_stats.buf points to actual data stored
   // here.
-  FIRSTPASS_STATS frame_stats_arr[MAX_LAG_BUFFERS];
+  FIRSTPASS_STATS *frame_stats_arr[MAX_LAP_BUFFERS + 1];
   int frame_stats_next_idx;  // Index to next unused element in frame_stats_arr.
   const FIRSTPASS_STATS *stats_in;
-  const FIRSTPASS_STATS *stats_in_start;
-  const FIRSTPASS_STATS *stats_in_end;
+  STATS_BUFFER_CTX *stats_buf_ctx;
   FIRSTPASS_STATS total_left_stats;
   int first_pass_done;
   int64_t bits_left;
@@ -164,8 +162,12 @@ typedef struct {
   // Error score of frames still to be coded in kf group
   int64_t kf_group_error_left;
 
-  // The fraction for a kf groups total bits allocated to the inter frames
-  double kfgroup_inter_fraction;
+  // Over time correction for bits per macro block estimation
+  double bpm_factor;
+
+  // Record of target and actual bits spent in current ARF group
+  int rolling_arf_group_target_bits;
+  int rolling_arf_group_actual_bits;
 
   int sr_update_lag;
 

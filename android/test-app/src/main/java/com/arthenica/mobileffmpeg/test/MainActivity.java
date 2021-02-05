@@ -20,34 +20,28 @@
 package com.arthenica.mobileffmpeg.test;
 
 import android.Manifest;
-import android.app.ActionBar;
-import android.app.AlertDialog;
-import android.content.Context;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.view.PagerTabStrip;
-import android.support.v4.view.ViewPager;
-import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
-import android.view.LayoutInflater;
-import android.view.View;
-import android.widget.Button;
-import android.widget.TextView;
 
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.viewpager.widget.PagerTabStrip;
+import androidx.viewpager.widget.ViewPager;
+
+import com.arthenica.mobileffmpeg.AsyncFFmpegExecuteTask;
 import com.arthenica.mobileffmpeg.Config;
-import com.arthenica.mobileffmpeg.util.AsyncExecuteTask;
-import com.arthenica.mobileffmpeg.util.ExecuteCallback;
+import com.arthenica.mobileffmpeg.ExecuteCallback;
+import com.arthenica.mobileffmpeg.Level;
+import com.arthenica.mobileffmpeg.Signal;
+import com.arthenica.mobileffmpeg.util.ResourcesUtil;
+import com.arthenica.smartexception.java.Exceptions;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Queue;
@@ -65,7 +59,11 @@ public class MainActivity extends AppCompatActivity {
             Manifest.permission.CAMERA
     };
 
-    protected static final Queue<Callable> actionQueue = new ConcurrentLinkedQueue<>();
+    static {
+        Exceptions.registerRootPackage("com.arthenica");
+    }
+
+    protected static final Queue<Callable<Object>> actionQueue = new ConcurrentLinkedQueue<>();
 
     protected static final Handler handler = new Handler();
 
@@ -73,7 +71,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void run() {
-            Callable callable;
+            Callable<Object> callable;
 
             do {
                 callable = actionQueue.poll();
@@ -81,7 +79,7 @@ public class MainActivity extends AppCompatActivity {
                     try {
                         callable.call();
                     } catch (final Exception e) {
-                        android.util.Log.e(MainActivity.TAG, "Running UI action received error.", e);
+                        android.util.Log.e(TAG, String.format("Running UI action received error.%s.", Exceptions.getStackTraceString(e)));
                     }
                 }
             } while (callable != null);
@@ -96,12 +94,6 @@ public class MainActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_main);
 
-        android.support.v7.app.ActionBar supportActionBar = getSupportActionBar();
-        if (supportActionBar != null) {
-            supportActionBar.setDisplayOptions(ActionBar.DISPLAY_SHOW_CUSTOM);
-            supportActionBar.setCustomView(R.layout.action_bar);
-        }
-
         PagerTabStrip pagerTabStrip = findViewById(R.id.pagerTabStrip);
         if (pagerTabStrip != null) {
             pagerTabStrip.setDrawFullUnderline(false);
@@ -110,7 +102,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         final ViewPager viewPager = findViewById(R.id.pager);
-        viewPager.setAdapter(new PagerAdapter(getSupportFragmentManager(), this, 7));
+        viewPager.setAdapter(new PagerAdapter(getSupportFragmentManager(), this));
 
         waitForUIAction();
 
@@ -138,11 +130,13 @@ public class MainActivity extends AppCompatActivity {
             registerAppFont();
             Log.d(TAG, "Application fonts registered.");
         } catch (final IOException e) {
-            Log.e(TAG, "Font registration failed.", e);
+            Log.e(TAG, String.format("Font registration failed.%s.", Exceptions.getStackTraceString(e)));
         }
 
         Log.d(TAG, "Listing supported camera ids.");
         listSupportedCameraIds();
+        Config.ignoreSignal(Signal.SIGXCPU);
+        Config.setLogLevel(Level.AV_LOG_DEBUG);
     }
 
     @Override
@@ -153,107 +147,35 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * <p>Starts a new asynchronous FFmpeg operation with arguments provided.
+     * <p>Starts a new asynchronous FFmpeg operation with command provided.
      *
-     * @param executeCallback callback function to receive result of this execution
-     * @param arguments       FFmpeg command options/arguments
+     * @param ExecuteCallback callback function to receive result of this execution
+     * @param command         FFmpeg command
      */
-    public static void executeAsync(final ExecuteCallback executeCallback, final String arguments) {
-        final AsyncExecuteTask asyncCommandTask = new AsyncExecuteTask(executeCallback);
-        asyncCommandTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, arguments.split(" "));
+    public static void executeAsync(final ExecuteCallback ExecuteCallback, final String command) {
+        final AsyncFFmpegExecuteTask asyncCommandTask = new AsyncFFmpegExecuteTask(command, ExecuteCallback);
+        asyncCommandTask.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
     public static void waitForUIAction() {
         handler.postDelayed(runnable, 250);
     }
 
-    public static void addUIAction(final Callable callable) {
+    public static void addUIAction(final Callable<Object> callable) {
         actionQueue.add(callable);
-    }
-
-    public AlertDialog createProgressDialog(final String text) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        LayoutInflater inflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-        if (inflater != null) {
-            View dialogView = inflater.inflate(R.layout.progress_dialog_layout, null);
-            builder.setView(dialogView);
-
-            TextView textView = dialogView.findViewById(R.id.progressDialogText);
-            if (textView != null) {
-                textView.setText(text);
-            }
-        }
-        builder.setCancelable(false);
-        return builder.create();
-    }
-
-    public AlertDialog createCancellableProgressDialog(final String text, final View.OnClickListener onClickListener) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        LayoutInflater inflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-        if (inflater != null) {
-            View dialogView = inflater.inflate(R.layout.cancellable_progress_dialog_layout, null);
-            builder.setView(dialogView);
-
-            TextView textView = dialogView.findViewById(R.id.progressDialogText);
-            if (textView != null) {
-                textView.setText(text);
-            }
-            Button cancelButton = dialogView.findViewById(R.id.cancelButton);
-            if (cancelButton != null) {
-                cancelButton.setOnClickListener(onClickListener);
-            }
-        }
-        builder.setCancelable(false);
-        return builder.create();
-    }
-
-    protected void resourceToFile(final int resourceId, final File file) throws IOException {
-        Bitmap bitmap = BitmapFactory.decodeResource(getResources(), resourceId);
-
-        if (file.exists()) {
-            file.delete();
-        }
-
-        FileOutputStream outputStream = new FileOutputStream(file);
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream);
-        outputStream.flush();
-        outputStream.close();
-    }
-
-    protected void rawResourceToFile(final int resourceId, final File file) throws IOException {
-        final InputStream inputStream = getResources().openRawResource(resourceId);
-        if (file.exists()) {
-            file.delete();
-        }
-        final FileOutputStream outputStream = new FileOutputStream(file);
-
-        try {
-            final byte[] buffer = new byte[1024];
-            int readSize;
-
-            while ((readSize = inputStream.read(buffer)) > 0) {
-                outputStream.write(buffer, 0, readSize);
-            }
-        } catch (final IOException e) {
-            Log.e(TAG, "Saving raw resource failed.", e);
-        } finally {
-            inputStream.close();
-            outputStream.flush();
-            outputStream.close();
-        }
     }
 
     protected void registerAppFont() throws IOException {
         final File cacheDirectory = getCacheDir();
 
         // SAVE FONTS
-        rawResourceToFile(R.raw.doppioone_regular, new File(cacheDirectory, "doppioone_regular.ttf"));
-        rawResourceToFile(R.raw.truenorg, new File(cacheDirectory, "truenorg.otf"));
+        ResourcesUtil.rawResourceToFile(getResources(), R.raw.doppioone_regular, new File(cacheDirectory, "doppioone_regular.ttf"));
+        ResourcesUtil.rawResourceToFile(getResources(), R.raw.truenorg, new File(cacheDirectory, "truenorg.otf"));
 
         final HashMap<String, String> fontNameMapping = new HashMap<>();
         fontNameMapping.put("MyFontName", "Doppio One");
         Config.setFontDirectory(this, cacheDirectory.getAbsolutePath(), fontNameMapping);
-        // Config.setFontDirectory(this, cacheDirectory.getAbsolutePath(), null);
+        Config.setEnvironmentVariable("FFREPORT", String.format("file=%s", new File(cacheDirectory.getAbsolutePath(), "ffreport.txt").getAbsolutePath()));
     }
 
     protected void listSupportedCameraIds() {

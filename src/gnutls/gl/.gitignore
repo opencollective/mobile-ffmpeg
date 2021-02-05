@@ -1,13 +1,13 @@
 /.deps/
 /.libs/
-/arpa/
 /sys/
-*.o
+/arpa/
 *.lo
+*.o
+*.la
 /Makefile
 /alloca.h
-/byteswap.h
-/libgnu.la
+/inttypes.h
 /limits.h
 /netdb.h
 /stddef.h

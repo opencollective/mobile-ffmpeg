@@ -5,6 +5,220 @@ Copyright (C) 2000-2016 Free Software Foundation, Inc.
 Copyright (C) 2013-2019 Nikos Mavrogiannopoulos
 See the end for copying conditions.
 
+* Version 3.6.13 (released 2020-03-31)
+
+** libgnutls: Fix a DTLS-protocol regression (caused by TLS1.3 support), since 3.6.3.
+   The DTLS client would not contribute any randomness to the DTLS negotiation,
+   breaking the security guarantees of the DTLS protocol (#960)
+   [GNUTLS-SA-2020-03-31, CVSS: high]
+
+** libgnutls: Added new APIs to access KDF algorithms (#813).
+
+** libgnutls: Added new callback gnutls_keylog_func that enables a custom
+   logging functionality.
+
+** libgnutls: Added support for non-null terminated usernames in PSK
+   negotiation (#586).
+
+** gnutls-cli-debug: Improved support for old servers that only support
+   SSL 3.0.
+
+** API and ABI modifications:
+gnutls_hkdf_extract: Added
+gnutls_hkdf_expand: Added
+gnutls_pbkdf2: Added
+gnutls_session_get_keylog_function: Added
+gnutls_session_set_keylog_function: Added
+gnutls_prf_hash_get: Added
+gnutls_psk_server_get_username2: Added
+gnutls_psk_set_client_credentials2: Added
+gnutls_psk_set_client_credentials_function2: Added
+gnutls_psk_set_server_credentials_function2: Added
+
+
+* Version 3.6.12 (released 2020-02-01)
+
+** libgnutls: Introduced TLS session flag (gnutls_session_get_flags())
+   to identify sessions that client request OCSP status request (#829).
+
+** libgnutls: Added support for X448 key exchange (RFC 7748) and Ed448
+   signature algorithm (RFC 8032) under TLS (#86).
+
+** libgnutls: Added the default-priority-string option to system configuration;
+   it allows overriding the compiled-in default-priority-string.
+
+** libgnutls: Added support for GOST CNT_IMIT ciphersuite (as defined by
+   draft-smyshlyaev-tls12-gost-suites-07).
+   By default this ciphersuite is disabled. It can be enabled by adding
+   +GOST to priority string. In the future this priority string may enable
+   other GOST ciphersuites as well.  Note, that server will fail to negotiate
+   GOST ciphersuites if TLS 1.3 is enabled both on a server and a client. It
+   is recommended for now to disable TLS 1.3 in setups where GOST ciphersuites
+   are enabled on GnuTLS-based servers.
+
+** libgnutls: added priority shortcuts for different GOST categories like
+   CIPHER-GOST-ALL, MAC-GOST-ALL, KX-GOST-ALL, SIGN-GOST-ALL, GROUP-GOST-ALL.
+
+** libgnutls: Reject certificates with invalid time fields. That is we reject
+   certificates with invalid characters in Time fields, or invalid time formatting
+   To continue accepting the invalid form compile with --disable-strict-der-time
+   (#207, #870).
+
+** libgnutls: Reject certificates which contain duplicate extensions. We were
+   previously printing warnings when printing such a certificate, but that is
+   not always sufficient to flag such certificates as invalid. Instead we now
+   refuse to import them (#887).
+
+** libgnutls: If a CA is found in the trusted list, check in addition to
+   time validity, whether the algorithms comply to the expected level prior
+   to accepting it. This addresses the problem of accepting CAs which would
+   have been marked as insecure otherwise (#877).
+
+** libgnutls: The min-verification-profile from system configuration applies
+   for all certificate verifications, not only under TLS. The configuration can
+   be overriden using the GNUTLS_SYSTEM_PRIORITY_FILE environment variable.
+
+** libgnutls: The stapled OCSP certificate verification adheres to the convention
+   used throughout the library of setting the 'GNUTLS_CERT_INVALID' flag.
+
+** libgnutls: On client side only send OCSP staples if they have been requested
+   by the server, and on server side always advertise that we support OCSP stapling
+   (#876).
+
+** libgnutls: Introduced the gnutls_ocsp_req_const_t which is compatible
+   with gnutls_ocsp_req_t but const.
+
+** certtool: Added the --verify-profile option to set a certificate
+   verification profile. Use '--verify-profile low' for certificate verification
+   to apply the 'NORMAL' verification profile.
+
+** certtool: The add_extension template option is considered even when generating
+   a certificate from a certificate request.
+
+** API and ABI modifications:
+GNUTLS_SFLAGS_CLI_REQUESTED_OCSP: Added
+GNUTLS_SFLAGS_SERV_REQUESTED_OCSP: Added
+gnutls_ocsp_req_const_t: Added
+
+
+* Version 3.6.11 (released 2019-12-01)
+
+** libgnutls: Use KERN_ARND for the system random number generator on NetBSD.
+   This syscall provides an endless stream of random numbers from the kernel's
+   ChaCha20-based random number generator, without blocking or requiring an open file
+   descriptor.
+
+** libgnutls: Corrected issue with TLS 1.2 session ticket handling as client
+   during resumption (#841).
+
+** libgnutls: gnutls_base64_decode2() succeeds decoding the empty string to
+   the empty string. This is a behavioral change of the API but it conforms
+   to the RFC4648 expectations (#834).
+
+** libgnutls: Fixed AES-CFB8 implementation, when input is shorter than
+   the block size. Fix backported from nettle.
+
+** certtool: CRL distribution points will be set in CA certificates even when
+   non self-signed (#765).
+
+** gnutls-cli/serv: added raw public-key handling capabilities (RFC7250).
+   Key material can be set via the --rawpkkeyfile and --rawpkfile flags.
+
+** API and ABI modifications:
+No changes since last version.
+
+
+* Version 3.6.10 (released 2019-09-29)
+
+** libgnutls: Added support for deterministic ECDSA/DSA (RFC6979)
+   Deterministic signing can be enabled by setting
+   GNUTLS_PRIVKEY_FLAG_REPRODUCIBLE when calling gnutls_privkey_sign_*()
+   functions (#94).
+
+** libgnutls: add gnutls_aead_cipher_encryptv2 and gnutls_aead_cipher_decryptv2
+   functions that will perform in-place encryption/decryption on data buffers (#718).
+
+** libgnutls: Corrected issue in gnutls_session_get_data2() which could fail under
+   TLS1.3, if a timeout callback was not set using gnutls_transport_set_pull_timeout_function()
+   (#823).
+
+** libgnutls: added interoperability tests with gnutls 2.12.x; addressed
+   issue with large record handling due to random padding (#811).
+
+** libgnutls: the server now selects the highest TLS protocol version,
+   if TLS 1.3 is enabled and the client advertises an older protocol version first (#837).
+
+** libgnutls: fix non-PIC assembly on i386 (#818).
+
+** libgnutls: added support for GOST 28147-89 cipher in CNT (GOST counter) mode
+   and MAC generation based on GOST 28147-89 (IMIT). For description of the
+   modes see RFC 5830. S-Box is id-tc26-gost-28147-param-Z (TC26Z) defined in
+   RFC 7836.
+
+** certtool: when outputting an encrypted private key do not insert the textual description
+   of it. This fixes a regression since 3.6.5 (#840).
+
+** API and ABI modifications:
+gnutls_aead_cipher_encryptv2: Added
+gnutls_aead_cipher_decryptv2: Added
+GNUTLS_CIPHER_GOST28147_TC26Z_CNT: Added
+GNUTLS_MAC_GOST28147_TC26Z_IMIT: Added
+
+* Version 3.6.9 (released 2019-07-25)
+
+** libgnutls: add gnutls_hash_copy/gnutls_hmac_copy functions that will create a copy
+   of digest or MAC context. Copying contexts for externally-registered digest and MAC
+   contexts is unupported (#787).
+
+** Marked the crypto implementation override APIs as deprecated. These APIs are rarely
+   used, are for a niche use case, but have significant side effects, such as preventing
+   any internal re-organization and extension of the internal cipher API. The APIs remain
+   functional though a compiler warning will be issued, and a future minor version update
+   may transform them to a no-op while keeping ABI compatibility (#789).
+
+** libgnutls: Added support for AES-GMAC, as a separate to GCM, MAC algorithm (#781).
+
+** libgnutls: gnutls_privkey_sign_hash2 now accepts the GNUTLS_PRIVKEY_SIGN_FLAG_TLS1_RSA
+   flag as documented. This makes it a complete replacement of gnutls_privkey_sign_hash().
+
+** libgnutls: Added support for Generalname registeredID.
+
+** The priority configuration was enhanced to allow more elaborate
+   system-wide configuration of the library (#587).
+   The following changes were included:
+    - The file is read as an ini file with '#' indicating a comment.
+    - The section "[priorities]" or global follows the existing semantics of
+      the configuration file, and allows to specify system-wide priority strings
+      which are accessed with the '@' prefix.
+    - The section "[overrides]" is added with the parameters "insecure-hash",
+      "insecure-sig", "insecure-sig-for-cert", "disabled-curve",
+      "disabled-version", "min-verification-profile", "tls-disabled-cipher",
+      "tls-disabled-mac", "tls-disabled-group", "tls-disabled-kx", which prohibit
+      specific algorithms or options globally. Existing algorithms in the
+      library can be marked as disabled and insecure, but no hard-coded
+      insecure algorithm can be marked as secure (so that the configuration
+      cannot be abused to make the system vulnerable).
+    - Unknown sections or options are skipped with a debug message, unless
+      the GNUTLS_SYSTEM_PRIORITY_FAIL_ON_INVALID environment parameter is
+      set to 1.
+
+** libgnutls: Added new flag for GNUTLS_CPUID_OVERRIDE
+    - 0x20: Enable SHA_NI instruction set
+
+** API and ABI modifications:
+gnutls_crypto_register_cipher: Deprecated
+gnutls_crypto_register_aead_cipher: Deprecated
+gnutls_crypto_register_digest: Deprecated
+gnutls_crypto_register_mac: Deprecated
+gnutls_get_system_config_file: Added
+gnutls_hash_copy: Added
+gnutls_hmac_copy: Added
+GNUTLS_MAC_AES_GMAC_128: Added
+GNUTLS_MAC_AES_GMAC_192: Added
+GNUTLS_MAC_AES_CMAC_256: Added
+GNUTLS_SAN_REGISTERED_ID: Added
+
+
 * Version 3.6.8 (released 2019-05-28)
 
 ** libgnutls: Added gnutls_prf_early() function to retrieve early keying

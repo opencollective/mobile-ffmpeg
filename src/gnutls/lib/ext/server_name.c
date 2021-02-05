@@ -46,7 +46,8 @@ const hello_ext_entry_st ext_mod_server_name = {
 	.gid = GNUTLS_EXTENSION_SERVER_NAME,
 	.validity = GNUTLS_EXT_FLAG_TLS | GNUTLS_EXT_FLAG_DTLS | GNUTLS_EXT_FLAG_CLIENT_HELLO |
 		    GNUTLS_EXT_FLAG_EE | GNUTLS_EXT_FLAG_TLS12_SERVER_HELLO,
-	.parse_type = GNUTLS_EXT_MANDATORY,
+	.client_parse_point = GNUTLS_EXT_MANDATORY,
+	.server_parse_point = GNUTLS_EXT_MANDATORY,
 	.recv_func = _gnutls_server_name_recv_params,
 	.send_func = _gnutls_server_name_send_params,
 	.pack_func = _gnutls_hello_ext_default_pack,
@@ -66,11 +67,10 @@ const hello_ext_entry_st ext_mod_server_name = {
  */
 static int
 _gnutls_server_name_recv_params(gnutls_session_t session,
-				const uint8_t * data, size_t _data_size)
+				const uint8_t * data, size_t data_size)
 {
 	const unsigned char *p;
 	uint16_t len, type;
-	ssize_t data_size = _data_size;
 	gnutls_datum_t name;
 
 	if (session->security_parameters.entity == GNUTLS_SERVER) {

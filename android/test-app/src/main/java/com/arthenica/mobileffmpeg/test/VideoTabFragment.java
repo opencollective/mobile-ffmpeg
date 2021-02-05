@@ -23,13 +23,9 @@ import android.app.AlertDialog;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
-import android.support.v4.app.Fragment;
+import android.util.AndroidRuntimeException;
 import android.util.Log;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.MediaController;
@@ -37,83 +33,78 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.VideoView;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
+
 import com.arthenica.mobileffmpeg.Config;
+import com.arthenica.mobileffmpeg.ExecuteCallback;
 import com.arthenica.mobileffmpeg.FFmpeg;
 import com.arthenica.mobileffmpeg.LogCallback;
 import com.arthenica.mobileffmpeg.LogMessage;
 import com.arthenica.mobileffmpeg.Statistics;
 import com.arthenica.mobileffmpeg.StatisticsCallback;
-import com.arthenica.mobileffmpeg.util.ExecuteCallback;
+import com.arthenica.mobileffmpeg.util.DialogUtil;
+import com.arthenica.mobileffmpeg.util.ResourcesUtil;
+import com.arthenica.smartexception.java.Exceptions;
 
 import java.io.File;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.concurrent.Callable;
 
-import static com.arthenica.mobileffmpeg.FFmpeg.RETURN_CODE_SUCCESS;
+import static com.arthenica.mobileffmpeg.Config.RETURN_CODE_SUCCESS;
 import static com.arthenica.mobileffmpeg.test.MainActivity.TAG;
 
 public class VideoTabFragment extends Fragment implements AdapterView.OnItemSelectedListener {
 
-    private MainActivity mainActivity;
     private VideoView videoView;
     private AlertDialog progressDialog;
     private String selectedCodec;
     private Statistics statistics;
 
-    @Override
-    public View onCreateView(@NonNull final LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.fragment_video_tab, container, false);
+    public VideoTabFragment() {
+        super(R.layout.fragment_video_tab);
     }
 
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        if (getView() != null) {
-            Spinner videoCodecSpinner = getView().findViewById(R.id.videoCodecSpinner);
-            ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(mainActivity,
-                    R.array.video_codec, R.layout.spinner_item);
-            adapter.setDropDownViewResource(R.layout.spinner_dropdown_item);
-            videoCodecSpinner.setAdapter(adapter);
-            videoCodecSpinner.setOnItemSelectedListener(this);
+        Spinner videoCodecSpinner = view.findViewById(R.id.videoCodecSpinner);
+        ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(requireContext(),
+                R.array.video_codec, R.layout.spinner_item);
+        adapter.setDropDownViewResource(R.layout.spinner_dropdown_item);
+        videoCodecSpinner.setAdapter(adapter);
+        videoCodecSpinner.setOnItemSelectedListener(this);
 
-            View encodeButton = getView().findViewById(R.id.encodeButton);
-            if (encodeButton != null) {
-                encodeButton.setOnClickListener(new View.OnClickListener() {
+        View encodeButton = view.findViewById(R.id.encodeButton);
+        if (encodeButton != null) {
+            encodeButton.setOnClickListener(new View.OnClickListener() {
 
-                    @Override
-                    public void onClick(View v) {
-                        encodeVideo();
-                        // encodeWebp();
-                    }
-                });
-            }
-
-            videoView = getView().findViewById(R.id.videoPlayerFrame);
+                @Override
+                public void onClick(View v) {
+                    encodeVideo();
+                    // encodeWebp();
+                }
+            });
         }
 
-        progressDialog = mainActivity.createProgressDialog("Encoding video");
+        videoView = view.findViewById(R.id.videoPlayerFrame);
+
+        progressDialog = DialogUtil.createProgressDialog(requireContext(), "Encoding video");
 
         selectedCodec = getResources().getStringArray(R.array.video_codec)[0];
     }
 
     @Override
-    public void setUserVisibleHint(boolean isVisibleToUser) {
-        super.setUserVisibleHint(isVisibleToUser);
-        if (isVisibleToUser) {
-            setActive();
-        }
+    public void onResume() {
+        super.onResume();
+        setActive();
     }
 
-    public void setMainActivity(MainActivity mainActivity) {
-        this.mainActivity = mainActivity;
-    }
-
-    public static VideoTabFragment newInstance(final MainActivity mainActivity) {
-        final VideoTabFragment fragment = new VideoTabFragment();
-        fragment.setMainActivity(mainActivity);
-        return fragment;
+    public static VideoTabFragment newInstance() {
+        return new VideoTabFragment();
     }
 
     public void enableLogCallback() {
@@ -131,7 +122,7 @@ public class VideoTabFragment extends Fragment implements AdapterView.OnItemSele
 
             @Override
             public void apply(final Statistics newStatistics) {
-                MainActivity.addUIAction(new Callable() {
+                MainActivity.addUIAction(new Callable<Object>() {
 
                     @Override
                     public Object call() {
@@ -140,6 +131,8 @@ public class VideoTabFragment extends Fragment implements AdapterView.OnItemSele
                         return null;
                     }
                 });
+
+                throw new AndroidRuntimeException("I am test exception thrown by test application");
             }
         });
     }
@@ -155,9 +148,9 @@ public class VideoTabFragment extends Fragment implements AdapterView.OnItemSele
     }
 
     public void encodeVideo() {
-        final File image1File = new File(mainActivity.getCacheDir(), "colosseum.jpg");
-        final File image2File = new File(mainActivity.getCacheDir(), "pyramid.jpg");
-        final File image3File = new File(mainActivity.getCacheDir(), "tajmahal.jpg");
+        final File image1File = new File(requireContext().getCacheDir(), "colosseum.jpg");
+        final File image2File = new File(requireContext().getCacheDir(), "pyramid.jpg");
+        final File image3File = new File(requireContext().getCacheDir(), "tajmahal.jpg");
         final File videoFile = getVideoFile();
 
         try {
@@ -175,23 +168,27 @@ public class VideoTabFragment extends Fragment implements AdapterView.OnItemSele
 
             showProgressDialog();
 
-            mainActivity.resourceToFile(R.drawable.colosseum, image1File);
-            mainActivity.resourceToFile(R.drawable.pyramid, image2File);
-            mainActivity.resourceToFile(R.drawable.tajmahal, image3File);
+            ResourcesUtil.resourceToFile(getResources(), R.drawable.colosseum, image1File);
+            ResourcesUtil.resourceToFile(getResources(), R.drawable.pyramid, image2File);
+            ResourcesUtil.resourceToFile(getResources(), R.drawable.tajmahal, image3File);
 
             final String ffmpegCommand = Video.generateEncodeVideoScript(image1File.getAbsolutePath(), image2File.getAbsolutePath(), image3File.getAbsolutePath(), videoFile.getAbsolutePath(), getSelectedVideoCodec(), getCustomOptions());
 
-            Log.d(TAG, String.format("FFmpeg process started with arguments\n'%s'", ffmpegCommand));
+            Log.d(TAG, String.format("FFmpeg process started with arguments\n'%s'.", ffmpegCommand));
 
-            MainActivity.executeAsync(new ExecuteCallback() {
+            long executionId = FFmpeg.executeAsync(ffmpegCommand, new ExecuteCallback() {
 
                 @Override
-                public void apply(final int returnCode, final String commandOutput) {
-                    Log.d(TAG, String.format("FFmpeg process exited with rc %d", returnCode));
+                public void apply(final long executionId, final int returnCode) {
+                    Log.d(TAG, String.format("FFmpeg process exited with rc %d.", returnCode));
+
+                    Log.d(TAG, "FFmpeg process output:");
+
+                    Config.printLastCommandOutput(Log.INFO);
 
                     hideProgressDialog();
 
-                    MainActivity.addUIAction(new Callable() {
+                    MainActivity.addUIAction(new Callable<Object>() {
 
                         @Override
                         public Object call() {
@@ -199,46 +196,48 @@ public class VideoTabFragment extends Fragment implements AdapterView.OnItemSele
                                 Log.d(TAG, "Encode completed successfully; playing video.");
                                 playVideo();
                             } else {
-                                Popup.show(mainActivity, "Encode failed. Please check log for the details.");
-                                Log.d(TAG, String.format("Encode failed with rc=%d", returnCode));
+                                Popup.show(requireContext(), "Encode failed. Please check log for the details.");
+                                Log.d(TAG, String.format("Encode failed with rc=%d.", returnCode));
                             }
 
                             return null;
                         }
                     });
                 }
-            }, ffmpegCommand);
+            });
+
+            Log.d(TAG, String.format("Async FFmpeg process started with executionId %d.", executionId));
 
         } catch (IOException e) {
-            Log.e(TAG, "Encode video failed", e);
-            Popup.show(mainActivity, "Encode video failed");
+            Log.e(TAG, String.format("Encode video failed %s.", Exceptions.getStackTraceString(e)));
+            Popup.show(requireContext(), "Encode video failed");
         }
     }
 
     protected void encodeWebp() {
-        final File imageFile = new File(mainActivity.getCacheDir(), "colosseum.jpg");
-        final File outputFile = new File(mainActivity.getFilesDir(), "video.webp");
+        final File imageFile = new File(requireContext().getCacheDir(), "colosseum.jpg");
+        final File outputFile = new File(requireContext().getFilesDir(), "video.webp");
 
         try {
-            mainActivity.resourceToFile(R.drawable.colosseum, imageFile);
+            ResourcesUtil.resourceToFile(getResources(), R.drawable.colosseum, imageFile);
 
             Log.d(TAG, "Testing VIDEO encoding with 'webp' codec");
 
             final String ffmpegCommand = String.format("-hide_banner -i %s %s", imageFile.getAbsolutePath(), outputFile.getAbsolutePath());
 
-            Log.d(TAG, String.format("FFmpeg process started with arguments\n'%s'", ffmpegCommand));
+            Log.d(TAG, String.format("FFmpeg process started with arguments\n'%s'.", ffmpegCommand));
 
             int returnCode = FFmpeg.execute(ffmpegCommand);
 
-            Log.d(TAG, String.format("FFmpeg process exited with rc %d", returnCode));
+            Log.d(TAG, String.format("FFmpeg process exited with rc %d.", returnCode));
         } catch (IOException e) {
-            Log.e(TAG, "Encode webp failed", e);
-            Popup.show(mainActivity, "Encode webp failed");
+            Log.e(TAG, String.format("Encode webp failed %s.", Exceptions.getStackTraceString(e)));
+            Popup.show(requireContext(), "Encode webp failed");
         }
     }
 
     protected void playVideo() {
-        MediaController mediaController = new MediaController(mainActivity);
+        MediaController mediaController = new MediaController(requireContext());
         mediaController.setAnchorView(videoView);
         videoView.setVideoURI(Uri.parse("file://" + getVideoFile().getAbsolutePath()));
         videoView.setMediaController(mediaController);
@@ -271,6 +270,9 @@ public class VideoTabFragment extends Fragment implements AdapterView.OnItemSele
         switch (videoCodec) {
             case "x264":
                 videoCodec = "libx264";
+                break;
+            case "openh264":
+                videoCodec = "libopenh264";
                 break;
             case "x265":
                 videoCodec = "libx265";
@@ -324,7 +326,7 @@ public class VideoTabFragment extends Fragment implements AdapterView.OnItemSele
         }
 
         final String video = "video." + extension;
-        return new File(mainActivity.getFilesDir(), video);
+        return new File(requireContext().getFilesDir(), video);
     }
 
     public String getCustomOptions() {
@@ -351,10 +353,10 @@ public class VideoTabFragment extends Fragment implements AdapterView.OnItemSele
     }
 
     public void setActive() {
-        android.util.Log.i(MainActivity.TAG, "Video Tab Activated");
+        Log.i(MainActivity.TAG, "Video Tab Activated");
         enableLogCallback();
         enableStatisticsCallback();
-        Popup.show(mainActivity, Tooltip.VIDEO_TEST_TOOLTIP_TEXT);
+        Popup.show(requireContext(), Tooltip.VIDEO_TEST_TOOLTIP_TEXT);
     }
 
     protected void showProgressDialog() {
@@ -379,7 +381,7 @@ public class VideoTabFragment extends Fragment implements AdapterView.OnItemSele
 
             TextView textView = progressDialog.findViewById(R.id.progressDialogText);
             if (textView != null) {
-                textView.setText(String.format("Encoding video: %% %s", completePercentage));
+                textView.setText(String.format("Encoding video: %% %s.", completePercentage));
             }
         }
     }
@@ -387,11 +389,11 @@ public class VideoTabFragment extends Fragment implements AdapterView.OnItemSele
     protected void hideProgressDialog() {
         progressDialog.dismiss();
 
-        MainActivity.addUIAction(new Callable() {
+        MainActivity.addUIAction(new Callable<Object>() {
 
             @Override
             public Object call() {
-                VideoTabFragment.this.progressDialog = mainActivity.createProgressDialog("Encoding video");
+                VideoTabFragment.this.progressDialog = DialogUtil.createProgressDialog(requireContext(), "Encoding video");
                 return null;
             }
         });

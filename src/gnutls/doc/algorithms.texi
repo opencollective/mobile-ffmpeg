@@ -562,6 +562,9 @@
 @item TLS_@-SRP_@-SHA_@-RSA_@-AES_@-256_@-CBC_@-SHA1
 @tab 0xC0 0x21
 @tab TLS1.0
+@item TLS_@-GOSTR341112_@-256_@-28147_@-CNT_@-IMIT
+@tab 0xC1 0x02
+@tab TLS1.2
 @end multitable
 
 
@@ -573,7 +576,6 @@
 
 @heading Protocols
 @table @code
-@item SSL3.0
 @item TLS1.0
 @item TLS1.1
 @item TLS1.2
@@ -597,6 +599,8 @@
 @item ARCFOUR-128
 @item ESTREAM-SALSA20-256
 @item SALSA20-256
+@item CHACHA20-32
+@item CHACHA20-64
 @item CAMELLIA-256-CBC
 @item CAMELLIA-192-CBC
 @item CAMELLIA-128-CBC
@@ -613,6 +617,7 @@
 @item AES-256-CFB8
 @item AES-128-XTS
 @item AES-256-XTS
+@item GOST28147-TC26Z-CNT
 @item 3DES-CBC
 @item DES-CBC
 @item RC2-40
@@ -633,6 +638,12 @@
 @item GOSTR341194
 @item STREEBOG-256
 @item STREEBOG-512
+@item AES-CMAC-128
+@item AES-CMAC-256
+@item AES-GMAC-128
+@item AES-GMAC-192
+@item AES-GMAC-256
+@item GOST28147-TC26Z-IMIT
 @end table
 
 @heading Key exchange methods
@@ -651,6 +662,7 @@
 @item SRP
 @item ANON-DH
 @item ANON-ECDH
+@item VKO-GOST-12
 @item RSA-EXPORT
 @end table
 
@@ -665,8 +677,10 @@
 @item GOST R 34.10-2001
 @item EC/ECDSA
 @item EdDSA (Ed25519)
+@item EdDSA (Ed448)
 @item DH
 @item ECDH (X25519)
+@item ECDH (X448)
 @end table
 
 @heading Public key signature algorithms
@@ -681,6 +695,7 @@
 @item RSA-PSS-SHA512
 @item RSA-PSS-RSAE-SHA512
 @item EdDSA-Ed25519
+@item EdDSA-Ed448
 @item ECDSA-SHA256
 @item ECDSA-SHA384
 @item ECDSA-SHA512
@@ -722,12 +737,13 @@
 
 @heading Groups
 @table @code
-@item SECP192R1
-@item SECP224R1
 @item SECP256R1
 @item SECP384R1
 @item SECP521R1
 @item X25519
+@item GC256B
+@item GC512A
+@item X448
 @item FFDHE2048
 @item FFDHE3072
 @item FFDHE4096

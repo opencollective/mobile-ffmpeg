@@ -56,11 +56,11 @@ static void read_cdef(AV1_COMMON *cm, aom_reader *r, MACROBLOCKD *const xd,
   const int index = cm->seq_params.sb_size == BLOCK_128X128
                         ? !!(mi_col & mask) + 2 * !!(mi_row & mask)
                         : 0;
-  cm->mi_grid_visible[(mi_row & m) * cm->mi_stride + (mi_col & m)]
-      ->cdef_strength = xd->cdef_preset[index] =
-      xd->cdef_preset[index] == -1 && !mbmi->skip
-          ? aom_read_literal(r, cm->cdef_info.cdef_bits, ACCT_STR)
-          : xd->cdef_preset[index];
+  cm->mi_grid_base[(mi_row & m) * cm->mi_stride + (mi_col & m)]->cdef_strength =
+      xd->cdef_preset[index] =
+          xd->cdef_preset[index] == -1 && !mbmi->skip
+              ? aom_read_literal(r, cm->cdef_info.cdef_bits, ACCT_STR)
+              : xd->cdef_preset[index];
 }
 
 static int read_delta_qindex(AV1_COMMON *cm, const MACROBLOCKD *xd,
@@ -601,9 +601,8 @@ static void read_filter_intra_mode_info(const AV1_COMMON *const cm,
 void av1_read_tx_type(const AV1_COMMON *const cm, MACROBLOCKD *xd, int blk_row,
                       int blk_col, TX_SIZE tx_size, aom_reader *r) {
   MB_MODE_INFO *mbmi = xd->mi[0];
-  const int txk_type_idx =
-      av1_get_txk_type_index(mbmi->sb_type, blk_row, blk_col);
-  TX_TYPE *tx_type = &mbmi->txk_type[txk_type_idx];
+  uint8_t *tx_type =
+      &xd->tx_type_map[blk_row * xd->tx_type_map_stride + blk_col];
   *tx_type = DCT_DCT;
 
   // No need to read transform type if block is skipped.
@@ -681,7 +680,7 @@ static void read_intrabc_info(AV1_COMMON *const cm, MACROBLOCKD *const xd,
 
     av1_find_mv_refs(cm, xd, mbmi, INTRA_FRAME, xd->ref_mv_count,
                      xd->ref_mv_stack, xd->weight, ref_mvs, /*global_mvs=*/NULL,
-                     mi_row, mi_col, inter_mode_ctx);
+                     inter_mode_ctx);
 
     int_mv nearestmv, nearmv;
 
@@ -1269,12 +1268,10 @@ static void read_inter_block_mode_info(AV1Decoder *const pbi,
   read_ref_frames(cm, xd, r, mbmi->segment_id, mbmi->ref_frame);
   const int is_compound = has_second_ref(mbmi);
 
-  MV_REFERENCE_FRAME ref_frame = av1_ref_frame_type(mbmi->ref_frame);
+  const MV_REFERENCE_FRAME ref_frame = av1_ref_frame_type(mbmi->ref_frame);
   av1_find_mv_refs(cm, xd, mbmi, ref_frame, xd->ref_mv_count, xd->ref_mv_stack,
-                   xd->weight, ref_mvs, /*global_mvs=*/NULL, mi_row, mi_col,
-                   inter_mode_ctx);
+                   xd->weight, ref_mvs, /*global_mvs=*/NULL, inter_mode_ctx);
 
-  int mode_ctx = av1_mode_context_analyzer(inter_mode_ctx, mbmi->ref_frame);
   mbmi->ref_mv_idx = 0;
 
   if (mbmi->skip_mode) {
@@ -1285,6 +1282,8 @@ static void read_inter_block_mode_info(AV1Decoder *const pbi,
         segfeature_active(&cm->seg, mbmi->segment_id, SEG_LVL_GLOBALMV)) {
       mbmi->mode = GLOBALMV;
     } else {
+      const int mode_ctx =
+          av1_mode_context_analyzer(inter_mode_ctx, mbmi->ref_frame);
       if (is_compound)
         mbmi->mode = read_inter_compound_mode(xd, r, mode_ctx);
       else
@@ -1307,7 +1306,7 @@ static void read_inter_block_mode_info(AV1Decoder *const pbi,
   }
 
   if (is_compound && mbmi->mode != GLOBAL_GLOBALMV) {
-    int ref_mv_idx = mbmi->ref_mv_idx + 1;
+    const int ref_mv_idx = mbmi->ref_mv_idx + 1;
     nearestmv[0] = xd->ref_mv_stack[ref_frame][0].this_mv;
     nearestmv[1] = xd->ref_mv_stack[ref_frame][0].comp_mv;
     nearmv[0] = xd->ref_mv_stack[ref_frame][ref_mv_idx].this_mv;
@@ -1321,14 +1320,11 @@ static void read_inter_block_mode_info(AV1Decoder *const pbi,
     lower_mv_precision(&nearmv[1].as_mv, allow_hp,
                        cm->cur_frame_force_integer_mv);
   } else if (mbmi->ref_mv_idx > 0 && mbmi->mode == NEARMV) {
-    int_mv cur_mv =
+    nearmv[0] =
         xd->ref_mv_stack[mbmi->ref_frame[0]][1 + mbmi->ref_mv_idx].this_mv;
-    nearmv[0] = cur_mv;
   }
 
-  int_mv ref_mv[2];
-  ref_mv[0] = nearestmv[0];
-  ref_mv[1] = nearestmv[1];
+  int_mv ref_mv[2] = { nearestmv[0], nearestmv[1] };
 
   if (is_compound) {
     int ref_mv_idx = mbmi->ref_mv_idx;
@@ -1373,12 +1369,12 @@ static void read_inter_block_mode_info(AV1Decoder *const pbi,
       mbmi->angle_delta[PLANE_TYPE_Y] = 0;
       mbmi->angle_delta[PLANE_TYPE_UV] = 0;
       mbmi->filter_intra_mode_info.use_filter_intra = 0;
-      if (is_interintra_wedge_used(bsize)) {
+      if (av1_is_wedge_used(bsize)) {
         mbmi->use_wedge_interintra = aom_read_symbol(
             r, ec_ctx->wedge_interintra_cdf[bsize], 2, ACCT_STR);
         if (mbmi->use_wedge_interintra) {
           mbmi->interintra_wedge_index = (int8_t)aom_read_symbol(
-              r, ec_ctx->wedge_idx_cdf[bsize], 16, ACCT_STR);
+              r, ec_ctx->wedge_idx_cdf[bsize], MAX_WEDGE_TYPES, ACCT_STR);
         }
       }
     }
@@ -1391,10 +1387,10 @@ static void read_inter_block_mode_info(AV1Decoder *const pbi,
 
   mbmi->motion_mode = SIMPLE_TRANSLATION;
   if (is_motion_variation_allowed_bsize(mbmi->sb_type) && !mbmi->skip_mode &&
-      !has_second_ref(mbmi))
-    mbmi->num_proj_ref =
-        av1_findSamples(cm, xd, mi_row, mi_col, pts, pts_inref);
-  av1_count_overlappable_neighbors(cm, xd, mi_row, mi_col);
+      !has_second_ref(mbmi)) {
+    mbmi->num_proj_ref = av1_findSamples(cm, xd, pts, pts_inref);
+  }
+  av1_count_overlappable_neighbors(cm, xd);
 
   if (mbmi->ref_frame[1] != INTRA_FRAME)
     mbmi->motion_mode = read_motion_mode(cm, xd, mbmi, r);
@@ -1434,18 +1430,19 @@ static void read_inter_block_mode_info(AV1Decoder *const pbi,
       assert(masked_compound_used);
 
       // compound_diffwtd, wedge
-      if (is_interinter_compound_used(COMPOUND_WEDGE, bsize))
+      if (is_interinter_compound_used(COMPOUND_WEDGE, bsize)) {
         mbmi->interinter_comp.type =
             COMPOUND_WEDGE + aom_read_symbol(r,
                                              ec_ctx->compound_type_cdf[bsize],
                                              MASKED_COMPOUND_TYPES, ACCT_STR);
-      else
+      } else {
         mbmi->interinter_comp.type = COMPOUND_DIFFWTD;
+      }
 
       if (mbmi->interinter_comp.type == COMPOUND_WEDGE) {
         assert(is_interinter_compound_used(COMPOUND_WEDGE, bsize));
         mbmi->interinter_comp.wedge_index = (int8_t)aom_read_symbol(
-            r, ec_ctx->wedge_idx_cdf[bsize], 16, ACCT_STR);
+            r, ec_ctx->wedge_idx_cdf[bsize], MAX_WEDGE_TYPES, ACCT_STR);
         mbmi->interinter_comp.wedge_sign = (int8_t)aom_read_bit(r, ACCT_STR);
       } else {
         assert(mbmi->interinter_comp.type == COMPOUND_DIFFWTD);
@@ -1461,9 +1458,10 @@ static void read_inter_block_mode_info(AV1Decoder *const pbi,
     mbmi->wm_params.wmtype = DEFAULT_WMTYPE;
     mbmi->wm_params.invalid = 0;
 
-    if (mbmi->num_proj_ref > 1)
+    if (mbmi->num_proj_ref > 1) {
       mbmi->num_proj_ref = av1_selectSamples(&mbmi->mv[0].as_mv, pts, pts_inref,
                                              mbmi->num_proj_ref, bsize);
+    }
 
     if (av1_find_projection(mbmi->num_proj_ref, pts, pts_inref, bsize,
                             mbmi->mv[0].as_mv.row, mbmi->mv[0].as_mv.col,

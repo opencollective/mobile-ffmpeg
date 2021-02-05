@@ -27,8 +27,8 @@
 
 @property (strong, nonatomic) IBOutlet UILabel *header;
 @property (strong, nonatomic) IBOutlet UITextField *commandText;
-@property (strong, nonatomic) IBOutlet UIButton *runButton;
-@property (strong, nonatomic) IBOutlet UIButton *runAsyncButton;
+@property (strong, nonatomic) IBOutlet UIButton *runFFmpegButton;
+@property (strong, nonatomic) IBOutlet UIButton *runFFprobeButton;
 @property (strong, nonatomic) IBOutlet UITextView *outputText;
 
 @end
@@ -41,8 +41,8 @@
 
     // STYLE UPDATE
     [Util applyEditTextStyle: self.commandText];
-    [Util applyButtonStyle: self.runButton];
-    [Util applyButtonStyle: self.runAsyncButton];
+    [Util applyButtonStyle: self.runFFmpegButton];
+    [Util applyButtonStyle: self.runFFprobeButton];
     [Util applyOutputTextStyle: self.outputText];
     [Util applyHeaderStyle: self.header];
 
@@ -55,26 +55,26 @@
     [super didReceiveMemoryWarning];
 }
 
-- (void)logCallback: (int)level :(NSString*)message {
+- (void)logCallback:(long)executionId :(int)level :(NSString*)message {
     dispatch_async(dispatch_get_main_queue(), ^{
         [self appendOutput: message];
     });
 }
 
-- (IBAction)runAction:(id)sender {
+- (IBAction)runFFmpegAction:(id)sender {
     [self clearOutput];
-    
+
     [[self commandText] endEditing:TRUE];
-    
+
     NSString *ffmpegCommand = [NSString stringWithFormat:@"-hide_banner %@", [[self commandText] text]];
-    
-    NSLog(@"Testing COMMAND synchronously.\n");
-    
+
+    NSLog(@"Testing FFmpeg COMMAND synchronously.\n");
+
     NSLog(@"FFmpeg process started with arguments\n\'%@\'\n", ffmpegCommand);
-    
+
     // EXECUTE
-    int result = [MobileFFmpeg execute:ffmpegCommand delimiter:@" "];
-    
+    int result = [MobileFFmpeg execute:ffmpegCommand];
+
     NSLog(@"FFmpeg process exited with rc %d\n", result);
 
     if (result != RETURN_CODE_SUCCESS) {
@@ -82,28 +82,25 @@
     }
 }
 
-- (IBAction)runAsyncAction:(id)sender {
+- (IBAction)runFFprobeAction:(id)sender {
     [self clearOutput];
-    
+
     [[self commandText] endEditing:TRUE];
 
-    NSString *ffmpegCommand = [NSString stringWithFormat:@"-hide_banner %@", [[self commandText] text]];
-    
-    NSLog(@"Testing COMMAND asynchronously.\n");
-    
-    dispatch_async(dispatch_get_main_queue(), ^{
-        
-        NSLog(@"FFmpeg process started with arguments\n\'%@\'\n", ffmpegCommand);
-        
-        // EXECUTE
-        int result = [MobileFFmpeg execute:ffmpegCommand delimiter:@" "];
-        
-        NSLog(@"FFmpeg process exited with rc %d\n", result);
+    NSString *ffprobeCommand = [NSString stringWithFormat:@"-hide_banner %@", [[self commandText] text]];
 
-        if (result != RETURN_CODE_SUCCESS) {
-            [Util alert:self withTitle:@"Error" message:@"Command failed. Please check output for the details." andButtonText:@"OK"];
-        }
-    });
+    NSLog(@"Testing FFprobe COMMAND synchronously.\n");
+
+    NSLog(@"FFprobe process started with arguments\n\'%@\'\n", ffprobeCommand);
+
+    // EXECUTE
+    int result = [MobileFFprobe execute:ffprobeCommand];
+
+    NSLog(@"FFprobe process exited with rc %d\n", result);
+
+    if (result != RETURN_CODE_SUCCESS) {
+        [Util alert:self withTitle:@"Error" message:@"Command failed. Please check output for the details." andButtonText:@"OK"];
+    }
 }
 
 - (void)setActive {
@@ -118,7 +115,7 @@
     self.outputText.text = [self.outputText.text stringByAppendingString:message];
     
     if (self.outputText.text.length > 0 ) {
-        NSRange bottom = NSMakeRange(self.outputText.text.length - 1, 1);
+        // NSRange bottom = NSMakeRange(self.outputText.text.length - 1, 1);
         // [self.outputText scrollRangeToVisible:bottom];
     }
 }

@@ -76,6 +76,10 @@ const char *x509_cafile = NULL;
 const char *dh_params_file = NULL;
 const char *x509_crlfile = NULL;
 const char *priorities = NULL;
+const char **rawpk_keyfile = NULL;
+const char **rawpk_file = NULL;
+unsigned rawpk_keyfile_size = 0;
+unsigned rawpk_file_size = 0;
 
 const char **ocsp_responses = NULL;
 unsigned ocsp_responses_size = 0;
@@ -88,6 +92,8 @@ unsigned alpn_protos_size = 0;
 
 gnutls_datum_t session_ticket_key;
 gnutls_anti_replay_t anti_replay;
+int record_max_size;
+const char *http_data_file = NULL;
 static void tcp_server(const char *name, int port);
 
 /* end of globals */
@@ -115,7 +121,9 @@ static void tcp_server(const char *name, int port);
 /* These are global */
 gnutls_srp_server_credentials_t srp_cred = NULL;
 gnutls_psk_server_credentials_t psk_cred = NULL;
+#ifdef ENABLE_ANON
 gnutls_anon_server_credentials_t dh_cred = NULL;
+#endif
 gnutls_certificate_credentials_t cert_cred = NULL;
 
 const int ssl_session_cache = 2048;
@@ -378,9 +386,11 @@ gnutls_session_t initialize_session(int dtls)
 	int ret;
 	unsigned i;
 	const char *err;
+#ifdef ENABLE_ALPN
 	gnutls_datum_t alpn[MAX_ALPN_PROTOCOLS];
+#endif
 	unsigned alpn_size;
-	unsigned flags = GNUTLS_SERVER | GNUTLS_POST_HANDSHAKE_AUTH;
+	unsigned flags = GNUTLS_SERVER | GNUTLS_POST_HANDSHAKE_AUTH | GNUTLS_ENABLE_RAWPK;
 
 	if (dtls)
 		flags |= GNUTLS_DATAGRAM;
@@ -437,6 +447,12 @@ gnutls_session_t initialize_session(int dtls)
 		}
 	}
 
+#ifndef ENABLE_ALPN
+	if (alpn_protos_size != 0) {
+		fprintf(stderr, "ALPN is not supported\n");
+		exit(1);
+	}
+#else
 	alpn_size = MIN(MAX_ALPN_PROTOCOLS,alpn_protos_size);
 	for (i=0;i<alpn_size;i++) {
 		alpn[i].data = (void*)alpn_protos[i];
@@ -448,8 +464,11 @@ gnutls_session_t initialize_session(int dtls)
 		fprintf(stderr, "Error setting ALPN protocols: %s\n", gnutls_strerror(ret));
 		exit(1);
 	}
+#endif
 
+#ifdef ENABLE_ANON
 	gnutls_credentials_set(session, GNUTLS_CRD_ANON, dh_cred);
+#endif
 
 	if (srp_cred != NULL)
 		gnutls_credentials_set(session, GNUTLS_CRD_SRP, srp_cred);
@@ -475,6 +494,17 @@ gnutls_session_t initialize_session(int dtls)
 		else
 			gnutls_certificate_server_set_request(session,
 							      GNUTLS_CERT_REQUEST);
+	}
+
+	/* use the record size limit extension */
+	if (record_max_size > 0) {
+		if (gnutls_record_set_max_recv_size(session, record_max_size) <
+		    0) {
+			fprintf(stderr,
+				"Cannot set the maximum record receive size to %d.\n",
+				record_max_size);
+			exit(1);
+		}
 	}
 
 	if (HAVE_OPT(HEARTBEAT))
@@ -543,7 +573,7 @@ static char *peer_print_info(gnutls_session_t session, int *ret_length,
 		return http_buffer;
 	}
 
-	if (gnutls_certificate_type_get(session) == GNUTLS_CRT_X509) {
+	if (gnutls_certificate_type_get2(session, GNUTLS_CTYPE_CLIENT) == GNUTLS_CRT_X509) {
 		const gnutls_datum_t *cert_list;
 		unsigned int cert_list_size = 0;
 
@@ -662,10 +692,10 @@ static char *peer_print_info(gnutls_session_t session, int *ret_length,
 	}
 
 	if (gnutls_auth_get_type(session) == GNUTLS_CRD_CERTIFICATE &&
-	    gnutls_certificate_type_get(session) != GNUTLS_CRT_X509) {
+	    gnutls_certificate_type_get2(session, GNUTLS_CTYPE_CLIENT) != GNUTLS_CRT_X509) {
 		tmp =
 		    gnutls_certificate_type_get_name
-		    (gnutls_certificate_type_get(session));
+		    (gnutls_certificate_type_get2(session, GNUTLS_CTYPE_CLIENT));
 		if (tmp == NULL)
 			tmp = str_unknown;
 		snprintf(tmp_buffer, tmp_buffer_size,
@@ -688,11 +718,13 @@ static char *peer_print_info(gnutls_session_t session, int *ret_length,
 		}
 #endif
 
+#if defined(ENABLE_DHE) || defined(ENABLE_ANON)
 		if (kx_alg == GNUTLS_KX_DHE_RSA || kx_alg == GNUTLS_KX_DHE_DSS) {
 			snprintf(tmp_buffer, tmp_buffer_size,
 				 "Ephemeral DH using prime of <b>%d</b> bits.<br>\n",
 				 gnutls_dh_get_prime_bits(session));
 		}
+#endif
 
 		tmp = gnutls_compression_get_name(gnutls_compression_get(session));
 		if (tmp == NULL)
@@ -706,7 +738,7 @@ static char *peer_print_info(gnutls_session_t session, int *ret_length,
 		if (tmp == NULL)
 			tmp = str_unknown;
 		snprintf(tmp_buffer, tmp_buffer_size,
-			 "<TR><TD>Ciphersuite</TD><TD>%s</TD></TR></p></TABLE>\n",
+			 "<TR><TD>Ciphersuite</TD><TD>%s</TD></TR>\n",
 			 tmp);
 	}
 
@@ -722,6 +754,8 @@ static char *peer_print_info(gnutls_session_t session, int *ret_length,
 	snprintf(tmp_buffer, tmp_buffer_size,
 		 "<TR><TD>MAC</TD><TD>%s</TD></TR>\n", tmp);
 
+	snprintf(tmp_buffer, tmp_buffer_size,
+		 "</TABLE></P>\n");
 
 	if (crtinfo) {
 		snprintf(tmp_buffer, tmp_buffer_size,
@@ -735,6 +769,45 @@ static char *peer_print_info(gnutls_session_t session, int *ret_length,
 
 	*ret_length = strlen(http_buffer);
 
+	return http_buffer;
+}
+
+static char *peer_print_data(gnutls_session_t session, int *ret_length)
+{
+	gnutls_datum_t data;
+	char *http_buffer;
+	size_t len;
+	int ret;
+
+	ret = gnutls_load_file(http_data_file, &data);
+	if (ret < 0) {
+		ret = asprintf(&http_buffer,
+			       "HTTP/1.0 404 Not Found\r\n"
+			       "Content-type: text/html\r\n"
+			       "\r\n"
+			       "<HTML><HEAD><TITLE>404 Not Found</TITLE></HEAD>\n"
+			       "<BODY><H1>Couldn't read %s</H1></BODY></HTML>\n\n",
+			       http_data_file);
+		if (ret < 0)
+			return NULL;
+
+		*ret_length = strlen(http_buffer);
+		return http_buffer;
+	}
+
+	ret = asprintf(&http_buffer,
+		       "HTTP/1.0 200 OK\r\n"
+		       "Content-Type: application/octet-stream\r\n"
+		       "Content-Length: %u\r\n"
+		       "\r\n",
+		       data.size);
+	if (ret < 0)
+		return NULL;
+	len = ret;
+	http_buffer = realloc(http_buffer, len + data.size);
+	memcpy(&http_buffer[len], data.data, data.size);
+	gnutls_free(data.data);
+	*ret_length = len + data.size;
 	return http_buffer;
 }
 
@@ -956,7 +1029,7 @@ static void strip(char *data)
 	}
 }
 
-static void
+static unsigned
 get_response(gnutls_session_t session, char *request,
 	     char **response, int *response_length)
 {
@@ -977,9 +1050,12 @@ get_response(gnutls_session_t session, char *request,
 			goto unimplemented;
 		*p = '\0';
 	}
-/*    *response = peer_print_info(session, request+4, h, response_length); */
+
 	if (http != 0) {
-		*response = peer_print_info(session, response_length, h);
+		if (http_data_file == NULL)
+			*response = peer_print_info(session, response_length, h);
+		else
+			*response = peer_print_data(session, response_length);
 	} else {
 		int ret;
 		strip(request);
@@ -990,28 +1066,37 @@ get_response(gnutls_session_t session, char *request,
 			*response = strdup("Successfully executed command\n");
 			if (*response == NULL) {
 				fprintf(stderr, "Memory error\n");
-				exit(1);
+				return 0;
 			}
 			*response_length = strlen(*response);
-			return;
+			return 1;
 		} else if (ret == 0) {
 			*response = strdup(request);
-			*response_length = ((*response) ? strlen(*response) : 0);
+			if (*response == NULL) {
+				fprintf(stderr, "Memory error\n");
+				return 0;
+			}
+			*response_length = strlen(*response);
 		} else {
+			*response = NULL;
 			do {
-				ret = gnutls_alert_send(session, GNUTLS_AL_FATAL, GNUTLS_A_UNEXPECTED_MESSAGE);
+				ret = gnutls_alert_send_appropriate(session, ret);
 			} while(ret == GNUTLS_E_AGAIN || ret == GNUTLS_E_INTERRUPTED);
+			return 0;
 		}
 	}
 
-	return;
+	return 1;
 
       unimplemented:
 	*response = strdup(HTTP_UNIMPLEMENTED);
+	if (*response == NULL)
+		return 0;
 	*response_length = ((*response) ? strlen(*response) : 0);
+	return 1;
 }
 
-static void terminate(int sig) __attribute__ ((noreturn));
+static void terminate(int sig) __attribute__ ((__noreturn__));
 
 static void terminate(int sig)
 {
@@ -1123,6 +1208,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+	/* X509 credentials */
 	if (x509_cafile != NULL) {
 		if ((ret = gnutls_certificate_set_x509_trust_file
 		     (cert_cred, x509_cafile, x509ctype)) < 0) {
@@ -1160,12 +1246,37 @@ int main(int argc, char **argv)
 				cert_set = 1;
 		}
 	}
+	
+	/* Raw public-key credentials */
+	if (rawpk_file_size > 0 && rawpk_keyfile_size > 0) {
+		for (i = 0; i < rawpk_keyfile_size; i++) {
+			ret = gnutls_certificate_set_rawpk_key_file(cert_cred, rawpk_file[i],
+			                                            rawpk_keyfile[i],
+			                                            x509ctype,
+			                                            NULL, 0, NULL, 0,
+			                                            0, 0);
+			if (ret < 0) {
+				fprintf(stderr,	"Error reading '%s' or '%s'\n",
+				        rawpk_file[i], rawpk_keyfile[i]);
+					GERR(ret);
+					exit(1);
+			} else {
+				cert_set = 1;
+			}
+		}
+	}
 
 	if (cert_set == 0) {
 		fprintf(stderr,
 			"Warning: no private key and certificate pairs were set.\n");
 	}
 
+#ifndef ENABLE_OCSP
+	if (HAVE_OPT(IGNORE_OCSP_RESPONSE_ERRORS) || ocsp_responses_size != 0) {
+		fprintf(stderr, "OCSP is not supported!\n");
+			exit(1);
+	}
+#else
 	/* OCSP status-request TLS extension */
 	if (HAVE_OPT(IGNORE_OCSP_RESPONSE_ERRORS))
 		gnutls_certificate_set_flags(cert_cred, GNUTLS_CERTIFICATE_SKIP_OCSP_RESPONSE_CHECK);
@@ -1181,13 +1292,19 @@ int main(int argc, char **argv)
 			exit(1);
 		}
 	}
+#endif
 
 	if (use_static_dh_params) {
+#if defined(ENABLE_DHE) || defined(ENABLE_ANON)
 		ret = gnutls_certificate_set_known_dh_params(cert_cred, GNUTLS_SEC_PARAM_MEDIUM);
 		if (ret < 0) {
 			fprintf(stderr, "Error while setting DH parameters: %s\n", gnutls_strerror(ret));
 			exit(1);
 		}
+#else
+		fprintf(stderr, "Setting DH parameters is not supported\n");
+		exit(1);
+#endif
 	} else {
 		gnutls_certificate_set_params_function(cert_cred, get_params);
 	}
@@ -1582,18 +1699,21 @@ static void tcp_server(const char *name, int port)
 						    || strstr(j->
 							      http_request,
 							      "\n\n")) {
-							get_response(j->
-								     tls_session,
-								     j->
-								     http_request,
-								     &j->
-								     http_response,
-								     &j->
-								     response_length);
-							j->http_state =
-							    HTTP_STATE_RESPONSE;
-							j->response_written
-							    = 0;
+							if (get_response(j->
+								         tls_session,
+								         j->
+								         http_request,
+								         &j->
+								         http_response,
+								         &j->
+								         response_length)) {
+								j->http_state =
+								    HTTP_STATE_RESPONSE;
+								j->response_written
+								    = 0;
+							} else {
+								j->http_state = HTTP_STATE_CLOSING;
+							}
 						}
 					}
 				}
@@ -1723,6 +1843,8 @@ static void cmd_parser(int argc, char **argv)
 	else
 		http = 1;
 
+	record_max_size = OPT_VALUE_RECORDSIZE;
+
 	if (HAVE_OPT(X509FMTDER))
 		x509ctype = GNUTLS_X509_FMT_DER;
 	else
@@ -1751,12 +1873,29 @@ static void cmd_parser(int argc, char **argv)
 	if (x509_certfile_size != x509_keyfile_size) {
 		fprintf(stderr, "The certificate number provided (%u) doesn't match the keys (%u)\n",
 			x509_certfile_size, x509_keyfile_size);
+			exit(1);
 	}
 
 	if (HAVE_OPT(X509CAFILE))
 		x509_cafile = OPT_ARG(X509CAFILE);
 	if (HAVE_OPT(X509CRLFILE))
 		x509_crlfile = OPT_ARG(X509CRLFILE);
+		
+	if (HAVE_OPT(RAWPKKEYFILE)) {
+		rawpk_keyfile = STACKLST_OPT(RAWPKKEYFILE);
+		rawpk_keyfile_size = STACKCT_OPT(RAWPKKEYFILE);
+	}
+
+	if (HAVE_OPT(RAWPKFILE)) {
+		rawpk_file = STACKLST_OPT(RAWPKFILE);
+		rawpk_file_size = STACKCT_OPT(RAWPKFILE);
+	}
+
+	if (rawpk_file_size != rawpk_keyfile_size) {
+		fprintf(stderr, "The number of raw public-keys provided (%u) doesn't match the number of corresponding private keys (%u)\n",
+			rawpk_file_size, rawpk_keyfile_size);
+			exit(1);
+	}
 
 	if (HAVE_OPT(SRPPASSWD))
 		srp_passwd = OPT_ARG(SRPPASSWD);
@@ -1776,6 +1915,9 @@ static void cmd_parser(int argc, char **argv)
 
 	if (HAVE_OPT(SNI_HOSTNAME_FATAL))
 		sni_hostname_fatal = 1;
+
+	if (HAVE_OPT(HTTPDATA))
+		http_data_file = OPT_ARG(HTTPDATA);
 
 }
 

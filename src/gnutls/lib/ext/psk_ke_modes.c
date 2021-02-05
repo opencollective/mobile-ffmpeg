@@ -106,10 +106,9 @@ psk_ke_modes_send_params(gnutls_session_t session,
  */
 static int
 psk_ke_modes_recv_params(gnutls_session_t session,
-			 const unsigned char *data, size_t _len)
+			 const unsigned char *data, size_t len)
 {
 	uint8_t ke_modes_len;
-	ssize_t len = _len;
 	const version_entry_st *vers = get_version(session);
 	gnutls_psk_server_credentials_t cred;
 	int dhpsk_pos = MAX_POS;
@@ -198,7 +197,8 @@ const hello_ext_entry_st ext_mod_psk_ke_modes = {
 	.name = "PSK Key Exchange Modes",
 	.tls_id = 45,
 	.gid = GNUTLS_EXTENSION_PSK_KE_MODES,
-	.parse_type = GNUTLS_EXT_TLS,
+	.client_parse_point = GNUTLS_EXT_TLS,
+	.server_parse_point = GNUTLS_EXT_TLS,
 	.validity = GNUTLS_EXT_FLAG_TLS | GNUTLS_EXT_FLAG_CLIENT_HELLO | GNUTLS_EXT_FLAG_TLS13_SERVER_HELLO,
 	.send_func = psk_ke_modes_send_params,
 	.recv_func = psk_ke_modes_recv_params

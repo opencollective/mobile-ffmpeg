@@ -58,7 +58,7 @@
     [super viewDidLoad];
 
     // VIDEO CODEC PICKER INIT
-    codecData = @[@"mpeg4", @"h264 (x264)", @"h264 (videotoolbox)", @"x265", @"xvid", @"vp8", @"vp9", @"aom", @"kvazaar", @"theora", @"hap"];
+    codecData = @[@"mpeg4", @"h264 (x264)", @"h264 (openh264)", @"h264 (videotoolbox)", @"x265", @"xvid", @"vp8", @"vp9", @"aom", @"kvazaar", @"theora", @"hap"];
     selectedCodec = 0;
     
     self.videoCodecPicker.dataSource = self;
@@ -120,7 +120,7 @@
     selectedCodec = row;
 }
 
-- (void)logCallback: (int)level :(NSString*)message {
+- (void)logCallback:(long)executionId :(int)level :(NSString*)message {
     dispatch_async(dispatch_get_main_queue(), ^{
         NSLog(@"%@", message);
     });
@@ -228,6 +228,8 @@
     // APPLYING NECESSARY TRANSFORMATION HERE
     if ([videoCodec isEqualToString:@"h264 (x264)"]) {
         videoCodec = @"libx264";
+    } else if ([videoCodec isEqualToString:@"h264 (openh264)"]) {
+        videoCodec = @"libopenh264";
     } else if ([videoCodec isEqualToString:@"h264 (videotoolbox)"]) {
         videoCodec = @"h264_videotoolbox";
     } else if ([videoCodec isEqualToString:@"x265"]) {
@@ -382,7 +384,7 @@
 @"-hide_banner -y -loop 1 -i %@ \
 -loop 1 -i %@ \
 -loop 1 -i %@ \
--filter_complex \
+-filter_complex \"\
 [0:v]setpts=PTS-STARTPTS,scale=w=\'if(gte(iw/ih,640/427),min(iw,640),-1)\':h=\'if(gte(iw/ih,640/427),-1,min(ih,427))\',scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=sar=1/1,split=2[stream1out1][stream1out2];\
 [1:v]setpts=PTS-STARTPTS,scale=w=\'if(gte(iw/ih,640/427),min(iw,640),-1)\':h=\'if(gte(iw/ih,640/427),-1,min(ih,427))\',scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=sar=1/1,split=2[stream2out1][stream2out2];\
 [2:v]setpts=PTS-STARTPTS,scale=w=\'if(gte(iw/ih,640/427),min(iw,640),-1)\':h=\'if(gte(iw/ih,640/427),-1,min(ih,427))\',scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=sar=1/1,split=2[stream3out1][stream3out2];\
@@ -396,7 +398,7 @@
 [stream2ending]fade=t=out:s=0:n=30[stream2fadeout];\
 [stream2fadein][stream1fadeout]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2,trim=duration=1,select=lte(n\\,30)[stream2blended];\
 [stream3fadein][stream2fadeout]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2,trim=duration=1,select=lte(n\\,30)[stream3blended];\
-[stream1overlaid][stream2blended][stream2overlaid][stream3blended][stream3overlaid]concat=n=5:v=1:a=0,scale=w=640:h=424,format=yuv420p[video] \
+[stream1overlaid][stream2blended][stream2overlaid][stream3blended][stream3overlaid]concat=n=5:v=1:a=0,scale=w=640:h=424,format=yuv420p[video]\" \
 -map [video] -vsync 2 -async 1 %@-c:v %@ -r 30 %@", image1, image2, image3, customOptions, videoCodec, videoFile];
 }
 

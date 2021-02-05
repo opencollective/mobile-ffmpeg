@@ -41,6 +41,8 @@ uint32_t WavpackUnpackSamples (WavpackContext *wpc, int32_t *buffer, uint32_t sa
     uint32_t bcount, samples_unpacked = 0, samples_to_unpack;
     int32_t *bptr = buffer;
 
+    memset (buffer, 0, num_channels * samples * sizeof (int32_t));
+
 #ifdef ENABLE_LEGACY
     if (wpc->stream3)
         return unpack_samples3 (wpc, buffer, samples);
@@ -71,7 +73,7 @@ uint32_t WavpackUnpackSamples (WavpackContext *wpc, int32_t *buffer, uint32_t sa
 
                 // allocate the memory for the entire raw block and read it in
 
-                wps->blockbuff = malloc (wps->wphdr.ckSize + 8);
+                wps->blockbuff = (unsigned char *)malloc (wps->wphdr.ckSize + 8);
 
                 if (!wps->blockbuff)
                     break;
@@ -178,15 +180,15 @@ uint32_t WavpackUnpackSamples (WavpackContext *wpc, int32_t *buffer, uint32_t sa
         // to stereo), then enter this conditional block...otherwise we just unpack the samples directly
 
         if (!wpc->reduced_channels && !(wps->wphdr.flags & FINAL_BLOCK)) {
-            int32_t *temp_buffer = malloc (samples_to_unpack * 8), *src, *dst;
+            int32_t *temp_buffer = (int32_t *)calloc (1, samples_to_unpack * 8), *src, *dst;
             int offset = 0;     // offset to next channel in sequence (0 to num_channels - 1)
             uint32_t samcnt;
 
             // since we are getting samples from multiple bocks in a multichannel sequence, we must
             // allocate a temporary buffer to unpack to so that we can re-interleave the samples
 
-	    if (!temp_buffer)
-		break;
+            if (!temp_buffer)
+                break;
 
             // loop through all the streams...
 
@@ -195,15 +197,15 @@ uint32_t WavpackUnpackSamples (WavpackContext *wpc, int32_t *buffer, uint32_t sa
                 // if the stream has not been allocated and corresponding block read, do that here...
 
                 if (wpc->current_stream == wpc->num_streams) {
-                    wpc->streams = realloc (wpc->streams, (wpc->num_streams + 1) * sizeof (wpc->streams [0]));
+                    wpc->streams = (WavpackStream **)realloc (wpc->streams, (wpc->num_streams + 1) * sizeof (wpc->streams [0]));
 
                     if (!wpc->streams)
-			break;
+                        break;
 
-                    wps = wpc->streams [wpc->num_streams++] = malloc (sizeof (WavpackStream));
+                    wps = wpc->streams [wpc->num_streams++] = (WavpackStream *)malloc (sizeof (WavpackStream));
 
                     if (!wps)
-			break;
+                        break;
 
                     CLEAR (*wps);
                     bcount = read_next_header (wpc->reader, wpc->wv_in, &wps->wphdr);
@@ -215,10 +217,10 @@ uint32_t WavpackUnpackSamples (WavpackContext *wpc, int32_t *buffer, uint32_t sa
                         break;
                     }
 
-                    wps->blockbuff = malloc (wps->wphdr.ckSize + 8);
+                    wps->blockbuff = (unsigned char *)malloc (wps->wphdr.ckSize + 8);
 
                     if (!wps->blockbuff)
-		        break;
+                        break;
 
                     memcpy (wps->blockbuff, &wps->wphdr, 32);
 

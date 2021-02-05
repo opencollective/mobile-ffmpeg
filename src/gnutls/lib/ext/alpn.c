@@ -39,7 +39,8 @@ const hello_ext_entry_st ext_mod_alpn = {
 	.tls_id = 16,
 	.gid = GNUTLS_EXTENSION_ALPN,
 	/* this extension must be parsed even on resumption */
-	.parse_type = GNUTLS_EXT_MANDATORY,
+	.client_parse_point = GNUTLS_EXT_MANDATORY,
+	.server_parse_point = GNUTLS_EXT_MANDATORY,
 	.validity = GNUTLS_EXT_FLAG_TLS | GNUTLS_EXT_FLAG_DTLS |
 		    GNUTLS_EXT_FLAG_CLIENT_HELLO | GNUTLS_EXT_FLAG_EE |
 		    GNUTLS_EXT_FLAG_TLS12_SERVER_HELLO,
@@ -51,13 +52,12 @@ const hello_ext_entry_st ext_mod_alpn = {
 
 static int
 _gnutls_alpn_recv_params(gnutls_session_t session,
-			 const uint8_t * data, size_t _data_size)
+			 const uint8_t * data, size_t data_size)
 {
 	unsigned int i;
 	int ret;
 	const uint8_t *p = data;
 	unsigned len1, len;
-	ssize_t data_size = _data_size;
 	alpn_ext_st *priv;
 	gnutls_ext_priv_data_t epriv;
 	int selected_protocol_index;

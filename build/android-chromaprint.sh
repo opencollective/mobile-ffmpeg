@@ -23,12 +23,12 @@ fi
 # ENABLE COMMON FUNCTIONS
 . ${BASEDIR}/build/android-common.sh
 
-# PREPARING PATHS & DEFINING ${INSTALL_PKG_CONFIG_DIR}
+# PREPARE PATHS & DEFINE ${INSTALL_PKG_CONFIG_DIR}
 LIB_NAME="chromaprint"
 set_toolchain_clang_paths ${LIB_NAME}
 
 # PREPARING FLAGS
-TARGET_HOST=$(get_target_host)
+BUILD_HOST=$(get_build_host)
 CFLAGS=$(get_cflags ${LIB_NAME})
 CXXFLAGS=$(get_cxxflags ${LIB_NAME})
 LDFLAGS=$(get_ldflags ${LIB_NAME})
@@ -64,6 +64,6 @@ cmake -Wno-dev \
 make -j$(get_cpu_count) || exit 1
 
 # CREATE PACKAGE CONFIG MANUALLY
-create_chromaprint_package_config "1.4.3"
+create_chromaprint_package_config "1.5.0"
 
 make install || exit 1

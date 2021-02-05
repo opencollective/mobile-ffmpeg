@@ -9,8 +9,10 @@
 /* Begin PBXBuildFile section */
 		340FABBE2115A17600B33CE7 /* VidStabViewController.h in Headers */ = {isa = PBXBuildFile; fileRef = 340FABBC2115A17600B33CE7 /* VidStabViewController.h */; };
 		340FABBF2115A17600B33CE7 /* VidStabViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 340FABBD2115A17600B33CE7 /* VidStabViewController.m */; };
-		3423D267217F7CC100C3C7ED /* MediaInformationParserTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 3423D266217F7CC100C3C7ED /* MediaInformationParserTests.m */; };
-		3423D269217F7D4E00C3C7ED /* MediaInformationParserTests.h in Headers */ = {isa = PBXBuildFile; fileRef = 3423D268217F7D4E00C3C7ED /* MediaInformationParserTests.h */; };
+		342900CB22DE2BCF0071B2E4 /* MediaInformationParserTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 342900C722DE2BCF0071B2E4 /* MediaInformationParserTest.m */; };
+		342900CD22DE2BCF0071B2E4 /* MediaInformationParserTest.h in Headers */ = {isa = PBXBuildFile; fileRef = 342900C922DE2BCF0071B2E4 /* MediaInformationParserTest.h */; };
+		342900D122DE384C0071B2E4 /* MobileFFmpegTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 342900CF22DE384C0071B2E4 /* MobileFFmpegTest.m */; };
+		342900D222DE384C0071B2E4 /* MobileFFmpegTest.h in Headers */ = {isa = PBXBuildFile; fileRef = 342900D022DE384C0071B2E4 /* MobileFFmpegTest.h */; };
 		343E66B5210784BD00F95E5B /* HttpsViewController.h in Headers */ = {isa = PBXBuildFile; fileRef = 343E66B3210784BD00F95E5B /* HttpsViewController.h */; };
 		343E66B6210784BD00F95E5B /* HttpsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 343E66B4210784BD00F95E5B /* HttpsViewController.m */; };
 		343E66B9210789DE00F95E5B /* Constants.h in Headers */ = {isa = PBXBuildFile; fileRef = 343E66B7210789DE00F95E5B /* Constants.h */; };
@@ -22,6 +24,8 @@
 		3457454C2113B8AD00059043 /* AudioViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3457454A2113B8AD00059043 /* AudioViewController.m */; };
 		3457454F2113B8D300059043 /* SubtitleViewController.h in Headers */ = {isa = PBXBuildFile; fileRef = 3457454D2113B8D300059043 /* SubtitleViewController.h */; };
 		345745502113B8D300059043 /* SubtitleViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3457454E2113B8D300059043 /* SubtitleViewController.m */; };
+		345E16AA24CB93D1007275F0 /* ConcurrentExecutionViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 345E16A824CB93D1007275F0 /* ConcurrentExecutionViewController.m */; };
+		345E16AB24CB93D1007275F0 /* ConcurrentExecutionViewController.h in Headers */ = {isa = PBXBuildFile; fileRef = 345E16A924CB93D1007275F0 /* ConcurrentExecutionViewController.h */; };
 		348439ED20B2EFAF001A3990 /* pyramid.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 348439EA20B2EFAF001A3990 /* pyramid.jpg */; };
 		348439EE20B2EFAF001A3990 /* tajmahal.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 348439EB20B2EFAF001A3990 /* tajmahal.jpg */; };
 		348439EF20B2EFAF001A3990 /* colosseum.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 348439EC20B2EFAF001A3990 /* colosseum.jpg */; };
@@ -59,8 +63,10 @@
 		09762EB4030C758C5727BD68 /* Pods-MobileFFmpegTest.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MobileFFmpegTest.debug.xcconfig"; path = "Pods/Target Support Files/Pods-MobileFFmpegTest/Pods-MobileFFmpegTest.debug.xcconfig"; sourceTree = "<group>"; };
 		340FABBC2115A17600B33CE7 /* VidStabViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = VidStabViewController.h; sourceTree = "<group>"; };
 		340FABBD2115A17600B33CE7 /* VidStabViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = VidStabViewController.m; sourceTree = "<group>"; };
-		3423D266217F7CC100C3C7ED /* MediaInformationParserTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MediaInformationParserTests.m; sourceTree = "<group>"; };
-		3423D268217F7D4E00C3C7ED /* MediaInformationParserTests.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MediaInformationParserTests.h; sourceTree = "<group>"; };
+		342900C722DE2BCF0071B2E4 /* MediaInformationParserTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MediaInformationParserTest.m; sourceTree = "<group>"; };
+		342900C922DE2BCF0071B2E4 /* MediaInformationParserTest.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MediaInformationParserTest.h; sourceTree = "<group>"; };
+		342900CF22DE384C0071B2E4 /* MobileFFmpegTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MobileFFmpegTest.m; sourceTree = "<group>"; };
+		342900D022DE384C0071B2E4 /* MobileFFmpegTest.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MobileFFmpegTest.h; sourceTree = "<group>"; };
 		343E66B3210784BD00F95E5B /* HttpsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HttpsViewController.h; sourceTree = "<group>"; };
 		343E66B4210784BD00F95E5B /* HttpsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HttpsViewController.m; sourceTree = "<group>"; };
 		343E66B7210789DE00F95E5B /* Constants.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Constants.h; sourceTree = "<group>"; };
@@ -72,6 +78,9 @@
 		3457454A2113B8AD00059043 /* AudioViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AudioViewController.m; sourceTree = "<group>"; };
 		3457454D2113B8D300059043 /* SubtitleViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SubtitleViewController.h; sourceTree = "<group>"; };
 		3457454E2113B8D300059043 /* SubtitleViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SubtitleViewController.m; sourceTree = "<group>"; };
+		345E16A824CB93D1007275F0 /* ConcurrentExecutionViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ConcurrentExecutionViewController.m; sourceTree = "<group>"; };
+		345E16A924CB93D1007275F0 /* ConcurrentExecutionViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ConcurrentExecutionViewController.h; sourceTree = "<group>"; };
+		346B8266244878C000971D55 /* MobileFFmpegTest.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MobileFFmpegTest.entitlements; sourceTree = "<group>"; };
 		348439EA20B2EFAF001A3990 /* pyramid.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = pyramid.jpg; sourceTree = "<group>"; };
 		348439EB20B2EFAF001A3990 /* tajmahal.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = tajmahal.jpg; sourceTree = "<group>"; };
 		348439EC20B2EFAF001A3990 /* colosseum.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = colosseum.jpg; sourceTree = "<group>"; };
@@ -161,6 +170,8 @@
 				3457454A2113B8AD00059043 /* AudioViewController.m */,
 				34FAE216209F7DDD005CE2AE /* CommandViewController.h */,
 				34FAE217209F7DDD005CE2AE /* CommandViewController.m */,
+				345E16A924CB93D1007275F0 /* ConcurrentExecutionViewController.h */,
+				345E16A824CB93D1007275F0 /* ConcurrentExecutionViewController.m */,
 				343E66B7210789DE00F95E5B /* Constants.h */,
 				34BB547B2109D44800606B7C /* Constants.m */,
 				343E66B3210784BD00F95E5B /* HttpsViewController.h */,
@@ -169,8 +180,11 @@
 				34FAE221209F7DDE005CE2AE /* LaunchScreen.storyboard */,
 				34FAE225209F7DDE005CE2AE /* main.m */,
 				34FAE21C209F7DDD005CE2AE /* Main.storyboard */,
-				3423D268217F7D4E00C3C7ED /* MediaInformationParserTests.h */,
-				3423D266217F7CC100C3C7ED /* MediaInformationParserTests.m */,
+				342900C922DE2BCF0071B2E4 /* MediaInformationParserTest.h */,
+				342900C722DE2BCF0071B2E4 /* MediaInformationParserTest.m */,
+				346B8266244878C000971D55 /* MobileFFmpegTest.entitlements */,
+				342900D022DE384C0071B2E4 /* MobileFFmpegTest.h */,
+				342900CF22DE384C0071B2E4 /* MobileFFmpegTest.m */,
 				3487ABA4220CEAA200A40E8D /* PipeViewController.h */,
 				3487ABA3220CEAA200A40E8D /* PipeViewController.m */,
 				3457454D2113B8D300059043 /* SubtitleViewController.h */,
@@ -204,14 +218,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				343E67092107C27600F95E5B /* TabBarController.h in Headers */,
+				345E16AB24CB93D1007275F0 /* ConcurrentExecutionViewController.h in Headers */,
 				3487ABA6220CEAA300A40E8D /* PipeViewController.h in Headers */,
-				3423D269217F7D4E00C3C7ED /* MediaInformationParserTests.h in Headers */,
 				3457454B2113B8AD00059043 /* AudioViewController.h in Headers */,
 				3457454F2113B8D300059043 /* SubtitleViewController.h in Headers */,
 				343E66B9210789DE00F95E5B /* Constants.h in Headers */,
 				343E67052107AD0100F95E5B /* Util.h in Headers */,
+				342900CD22DE2BCF0071B2E4 /* MediaInformationParserTest.h in Headers */,
 				343E66B5210784BD00F95E5B /* HttpsViewController.h in Headers */,
 				340FABBE2115A17600B33CE7 /* VidStabViewController.h in Headers */,
+				342900D222DE384C0071B2E4 /* MobileFFmpegTest.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -337,14 +353,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				342900D122DE384C0071B2E4 /* MobileFFmpegTest.m in Sources */,
 				3487ABA5220CEAA300A40E8D /* PipeViewController.m in Sources */,
+				345E16AA24CB93D1007275F0 /* ConcurrentExecutionViewController.m in Sources */,
 				34FAE21B209F7DDD005CE2AE /* VideoViewController.m in Sources */,
 				34FAE215209F7DDD005CE2AE /* AppDelegate.m in Sources */,
 				34FAE226209F7DDE005CE2AE /* main.m in Sources */,
 				343E66B6210784BD00F95E5B /* HttpsViewController.m in Sources */,
 				340FABBF2115A17600B33CE7 /* VidStabViewController.m in Sources */,
+				342900CB22DE2BCF0071B2E4 /* MediaInformationParserTest.m in Sources */,
 				34FAE218209F7DDD005CE2AE /* CommandViewController.m in Sources */,
-				3423D267217F7CC100C3C7ED /* MediaInformationParserTests.m in Sources */,
 				343E670A2107C27600F95E5B /* TabBarController.m in Sources */,
 				345745502113B8D300059043 /* SubtitleViewController.m in Sources */,
 				343E67062107AD0100F95E5B /* Util.m in Sources */,
@@ -497,8 +515,10 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = MobileFFmpegTest/MobileFFmpegTest.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 49;
 				DEVELOPMENT_TEAM = 98GD5J4999;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -514,6 +534,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.arthenica.mobileffmpeg.test.MobileFFmpegTest;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SUPPORTS_MACCATALYST = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -524,8 +545,10 @@
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = MobileFFmpegTest/MobileFFmpegTest.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 49;
 				DEVELOPMENT_TEAM = 98GD5J4999;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -541,6 +564,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.arthenica.mobileffmpeg.test.MobileFFmpegTest;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				SUPPORTS_MACCATALYST = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;

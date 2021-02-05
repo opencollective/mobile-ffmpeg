@@ -60,7 +60,7 @@ endif
 ACLOCAL_AMFLAGS = -I m4 -I src/libopts/m4 -I src/gl/m4 -I lib/unistring/m4 --install
 
 EXTRA_DIST = cfg.mk maint.mk CONTRIBUTING.md README.md LICENSE AUTHORS NEWS \
-	ChangeLog THANKS INSTALL.md
+	ChangeLog THANKS INSTALL.md RELEASES.md
 
 DISTCLEANFILES = AUTHORS
 
@@ -101,16 +101,16 @@ abi-dump-latest: lib/libgnutls.la libdane/libgnutls-dane.la
 
 abi-check-latest: lib/libgnutls.la libdane/libgnutls-dane.la
 	@echo "Checking whether the latest ABI dump matches"
-	@abidiff --suppressions $(ABIGNORE_FILE) lib/.libs/libgnutls.so $(LIBGNUTLS_ABI_LAST_FILE) --hd2 "$(srcdir)/lib/includes/gnutls/"; if test $$? != 0;then \
+	@abidiff --suppressions $(ABIGNORE_FILE) lib/.libs/libgnutls.so $(LIBGNUTLS_ABI_LAST_FILE) --hd2 "$(srcdir)/lib/includes/gnutls/" --hd2 $(builddir)/lib/includes/gnutls/ ; if test $$? != 0;then \
 		echo "*********************************************************"; \
-		echo "libgnutls ABI has changed; use 'make-files-update'       "; \
+		echo "libgnutls ABI has changed; use 'make files-update'       "; \
 		echo "and use 'git diff' to check correctness before committing"; \
 		echo "*********************************************************"; \
 		false; \
 	fi
-	@abidiff libdane/.libs/libgnutls-dane.so $(LIBDANE_ABI_LAST_FILE) --hd2 "$(srcdir)/libdane/includes/gnutls/"; if test $$? != 0;then \
+	@abidiff libdane/.libs/libgnutls-dane.so $(LIBDANE_ABI_LAST_FILE) --hd2 "$(srcdir)/libdane/includes/gnutls/" --hd2 $(builddir)/lib/includes/gnutls/; if test $$? != 0;then \
 		echo "*********************************************************"; \
-		echo "libgnutls-dane ABI has changed; use 'make-files-update'  "; \
+		echo "libgnutls-dane ABI has changed; use 'make files-update'  "; \
 		echo "and use 'git diff' to check correctness before committing"; \
 		echo "*********************************************************"; \
 		false; \
@@ -123,23 +123,23 @@ ABICHECK_COMMON = --no-added-syms
 abi-check: lib/libgnutls.la libdane/libgnutls-dane.la
 	@for file in $$(echo $(srcdir)/devel/libgnutls-*-$$(uname -m).abi);do \
 		echo "Comparing libgnutls with $$file"; \
-		abidiff $${file} lib/.libs/libgnutls.so $(ABICHECK_COMMON) --suppressions $(ABIGNORE_FILE) --hd2 "$(srcdir)/lib/includes/gnutls/"; \
+		abidiff $${file} lib/.libs/libgnutls.so $(ABICHECK_COMMON) --suppressions $(ABIGNORE_FILE) --hd2 "$(srcdir)/lib/includes/gnutls/" --hd2 $(builddir)/lib/includes/gnutls/; \
 		if test $$? != 0;then \
 			echo "****************************************************************************"; \
 			echo "ABI check failed; If intentional add suppression in devel/libgnutls.abignore"; \
 			echo "****************************************************************************"; \
-			false; \
+			exit 1; \
 		fi; \
 	done
 	@for file in $$(echo $(srcdir)/devel/libdane-*-$$(uname -m).abi);do \
 		echo "Comparing libgnutls-dane with $$file"; \
-		abidiff $${file} libdane/.libs/libgnutls-dane.so $(ABICHECK_COMMON) --hd2 "$(srcdir)/libdane/includes/gnutls/"; \
+		abidiff $${file} libdane/.libs/libgnutls-dane.so $(ABICHECK_COMMON) --hd2 "$(srcdir)/libdane/includes/gnutls/" --hd2 $(builddir)/lib/includes/gnutls/; \
 		if test $$? != 0;then \
 			echo "**********************************************"; \
 			echo "ABI check failed; If intentional add a        "; \
 			echo "libabigail suppression file for libgnutls-dane"; \
 			echo "**********************************************"; \
-			false; \
+			exit 1; \
 		fi; \
 	done
 	@echo "********************"
@@ -158,7 +158,7 @@ symbol-check: lib/libgnutls.la
 			false; \
 		else \
 			echo "*************************************************************"; \
-			echo "Symbols were added in the library; use 'make-files-update'   "; \
+			echo "Symbols were added in the library; use 'make files-update'   "; \
 			echo "and use 'git diff' to check correctness before committing    "; \
 			echo "*************************************************************"; \
 			false; \
@@ -204,6 +204,6 @@ dist-hook: libopts-check
 	$(MAKE) -C doc/manpages compare-makefile
 	$(MAKE) ChangeLog
 	mv ChangeLog $(distdir)
-	touch $(distdir)/doc/*.html $(distdir)/doc/*.pdf $(distdir)/doc/*.info
+	touch -c $(distdir)/doc/*.html $(distdir)/doc/*.pdf $(distdir)/doc/*.info
 
 .PHONY: abi-check abi-dump-versioned abi-dump-latest pic-check symbol-check local-code-coverage-output files-update libopts-check AUTHORS

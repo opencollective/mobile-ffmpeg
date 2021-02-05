@@ -23,12 +23,12 @@ fi
 # ENABLE COMMON FUNCTIONS
 . ${BASEDIR}/build/android-common.sh
 
-# PREPARING PATHS & DEFINING ${INSTALL_PKG_CONFIG_DIR}
+# PREPARE PATHS & DEFINE ${INSTALL_PKG_CONFIG_DIR}
 LIB_NAME="gnutls"
 set_toolchain_clang_paths ${LIB_NAME}
 
 # PREPARING FLAGS
-TARGET_HOST=$(get_target_host)
+BUILD_HOST=$(get_build_host)
 COMMON_CFLAGS=$(get_cflags ${LIB_NAME})
 COMMON_CXXFLAGS=$(get_cxxflags ${LIB_NAME})
 COMMON_LDFLAGS=$(get_ldflags ${LIB_NAME})
@@ -46,9 +46,19 @@ export GMP_LIBS="-L${BASEDIR}/prebuilt/android-$(get_target_build)/gmp/lib -lgmp
 
 cd ${BASEDIR}/src/${LIB_NAME} || exit 1
 
+HARDWARE_OPTIONS=""
+case ${ARCH} in
+    x86)
+        HARDWARE_OPTIONS="--disable-hardware-acceleration"
+    ;;
+    *)
+        HARDWARE_OPTIONS="--enable-hardware-acceleration"
+    ;;
+esac
+
 make distclean 2>/dev/null 1>/dev/null
 
-# RECONFIGURING IF REQUESTED
+# RECONFIGURE IF REQUESTED
 if [[ ${RECONF_gnutls} -eq 1 ]]; then
     autoreconf_library ${LIB_NAME}
 fi
@@ -61,7 +71,7 @@ fi
     --with-included-unistring \
     --without-idn \
     --without-p11-kit \
-    --enable-hardware-acceleration \
+    ${HARDWARE_OPTIONS} \
     --enable-static \
     --disable-openssl-compatibility \
     --disable-shared \
@@ -73,11 +83,11 @@ fi
     --disable-tests \
     --disable-tools \
     --disable-maintainer-mode \
-    --host=${TARGET_HOST} || exit 1
+    --host=${BUILD_HOST} || exit 1
 
 make -j$(get_cpu_count) || exit 1
 
 # CREATE PACKAGE CONFIG MANUALLY
-create_gnutls_package_config "3.6.8"
+create_gnutls_package_config "3.6.13"
 
 make install || exit 1

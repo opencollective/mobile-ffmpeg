@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Taner Sener
+ * Copyright (c) 2018-2020 Taner Sener
  *
  * This file is part of MobileFFmpeg.
  *
@@ -20,10 +20,6 @@
 package com.arthenica.mobileffmpeg;
 
 import android.content.Context;
-import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraCharacteristics;
-import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CameraMetadata;
 import android.os.Build;
 import android.util.Log;
 
@@ -31,39 +27,40 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static android.content.Context.CAMERA_SERVICE;
-import static com.arthenica.mobileffmpeg.FFmpeg.getBuildDate;
-import static com.arthenica.mobileffmpeg.FFmpeg.getVersion;
-
 /**
  * <p>This class is used to configure MobileFFmpeg library utilities/tools.
  *
- * <p>1. {@link LogCallback}: By default this class redirects FFmpeg output to Logcat. As another
- * option, it is possible not to print messages to Logcat and pass them to a {@link LogCallback}
- * function. This function can decide whether to print these logs, show them inside another
- * container or ignore them.
+ * <p>1. {@link LogCallback}: This class redirects FFmpeg/FFprobe output to Logcat by default. As
+ * an alternative, it is possible not to print messages to Logcat and pass them to a
+ * {@link LogCallback} function. This function can decide whether to print these logs, show them
+ * inside another container or ignore them.
  *
- * <p>2. {@link #setLogLevel(Level)}/{@link #getLogLevel()}: Use this methods to see/control FFmpeg
- * log severity.
+ * <p>2. {@link #setLogLevel(Level)}/{@link #getLogLevel()}: Use this methods to set/get
+ * FFmpeg/FFprobe log severity.
  *
- * <p>3. {@link StatisticsCallback}: It is possible to receive statistics about ongoing operation by
- * defining a {@link StatisticsCallback} function or by calling {@link #getLastReceivedStatistics()}
- * method.
+ * <p>3. {@link StatisticsCallback}: It is possible to receive statistics about an ongoing
+ * operation by defining a {@link StatisticsCallback} function or by calling
+ * {@link #getLastReceivedStatistics()} method.
  *
  * <p>4. Font configuration: It is possible to register custom fonts with
  * {@link #setFontconfigConfigurationPath(String)} and
  * {@link #setFontDirectory(Context, String, Map)} methods.
  *
- * <p>PS: This class is introduced in v2.1 as an enhanced version of older <code>Log</code> class.
- *
  * @author Taner Sener
  * @since v2.1
  */
 public class Config {
+
+    public static final int RETURN_CODE_SUCCESS = 0;
+
+    public static final int RETURN_CODE_CANCEL = 255;
+
+    private static int lastReturnCode = 0;
 
     /**
      * Defines tag used for logging.
@@ -80,61 +77,73 @@ public class Config {
 
     private static Statistics lastReceivedStatistics;
 
-    private static final AtomicReference<StringBuffer> systemCommandOutputReference;
-
-    private static boolean runningSystemCommand;
-
     private static int lastCreatedPipeIndex;
+
+    private static final List<FFmpegExecution> executions;
 
     static {
 
         Log.i(Config.TAG, "Loading mobile-ffmpeg.");
 
-        /* LOAD NOT-LOADED LIBRARIES ON API < 21 */
+        boolean nativeFFmpegLoaded = false;
+        boolean nativeFFmpegTriedAndFailed = false;
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
+
+            /* LOADING LIBRARIES MANUALLY ON API < 21 */
             final List<String> externalLibrariesEnabled = getExternalLibraries();
-            if (externalLibrariesEnabled.contains("tesseract") || externalLibrariesEnabled.contains("x265") || externalLibrariesEnabled.contains("snappy") || externalLibrariesEnabled.contains("openh264")) {
-                // libc++_shared.so included only when tesseract or x265 is enabled
+            if (externalLibrariesEnabled.contains("tesseract") || externalLibrariesEnabled.contains("x265") || externalLibrariesEnabled.contains("snappy") || externalLibrariesEnabled.contains("openh264") || externalLibrariesEnabled.contains("rubberband")) {
                 System.loadLibrary("c++_shared");
             }
-            System.loadLibrary("cpufeatures");
-            System.loadLibrary("avutil");
-            System.loadLibrary("swscale");
-            System.loadLibrary("swresample");
-            System.loadLibrary("avcodec");
-            System.loadLibrary("avformat");
-            System.loadLibrary("avfilter");
-            System.loadLibrary("avdevice");
+
+            if (AbiDetect.ARM_V7A.equals(AbiDetect.getNativeAbi())) {
+                try {
+                    System.loadLibrary("avutil_neon");
+                    System.loadLibrary("swscale_neon");
+                    System.loadLibrary("swresample_neon");
+                    System.loadLibrary("avcodec_neon");
+                    System.loadLibrary("avformat_neon");
+                    System.loadLibrary("avfilter_neon");
+                    System.loadLibrary("avdevice_neon");
+                    nativeFFmpegLoaded = true;
+                } catch (final UnsatisfiedLinkError e) {
+                    Log.i(Config.TAG, "NEON supported armeabi-v7a ffmpeg library not found. Loading default armeabi-v7a library.", e);
+                    nativeFFmpegTriedAndFailed = true;
+                }
+            }
+
+            if (!nativeFFmpegLoaded) {
+                System.loadLibrary("avutil");
+                System.loadLibrary("swscale");
+                System.loadLibrary("swresample");
+                System.loadLibrary("avcodec");
+                System.loadLibrary("avformat");
+                System.loadLibrary("avfilter");
+                System.loadLibrary("avdevice");
+            }
         }
 
         /* ALL MOBILE-FFMPEG LIBRARIES LOADED AT STARTUP */
         Abi.class.getName();
         FFmpeg.class.getName();
+        FFprobe.class.getName();
 
-        /*
-         * NEON supported arm-v7a library has a different name
-         */
-        boolean nativeLibraryLoaded = false;
-        if (AbiDetect.ARM_V7A.equals(AbiDetect.getNativeAbi())) {
-            if (AbiDetect.isNativeLTSBuild()) {
+        boolean nativeMobileFFmpegLoaded = false;
+        if (!nativeFFmpegTriedAndFailed && AbiDetect.ARM_V7A.equals(AbiDetect.getNativeAbi())) {
+            try {
 
                 /*
-                 * IF CPU SUPPORTS ARM-V7A-NEON THE TRY TO LOAD IT FIRST. IF NOT LOAD DEFAULT ARM-V7A
+                 * THE TRY TO LOAD ARM-V7A-NEON FIRST. IF NOT LOAD DEFAULT ARM-V7A
                  */
 
-                try {
-                    System.loadLibrary("mobileffmpeg-armv7a-neon");
-                    nativeLibraryLoaded = true;
-                    AbiDetect.setArmV7aNeonLoaded(true);
-                } catch (final UnsatisfiedLinkError e) {
-                    Log.i(Config.TAG, "NEON supported armeabi-v7a library not found. Loading default armeabi-v7a library.", e);
-                }
-            } else {
+                System.loadLibrary("mobileffmpeg_armv7a_neon");
+                nativeMobileFFmpegLoaded = true;
                 AbiDetect.setArmV7aNeonLoaded(true);
+            } catch (final UnsatisfiedLinkError e) {
+                Log.i(Config.TAG, "NEON supported armeabi-v7a mobileffmpeg library not found. Loading default armeabi-v7a library.", e);
             }
         }
 
-        if (!nativeLibraryLoaded) {
+        if (!nativeMobileFFmpegLoaded) {
             System.loadLibrary("mobileffmpeg");
         }
 
@@ -145,13 +154,11 @@ public class Config {
 
         lastReceivedStatistics = new Statistics();
 
-        Config.enableRedirection();
+        enableRedirection();
 
-        systemCommandOutputReference = new AtomicReference<>();
-        systemCommandOutputReference.set(new StringBuffer());
-
-        runningSystemCommand = false;
         lastCreatedPipeIndex = 0;
+
+        executions = Collections.synchronizedList(new ArrayList<FFmpegExecution>());
     }
 
     /**
@@ -162,14 +169,15 @@ public class Config {
 
     /**
      * <p>Enables log and statistics redirection.
-     * <p>When redirection is not enabled FFmpeg logs are printed to stderr. By enabling redirection, they are routed
-     * to Logcat and can be routed further to a callback function.
-     * <p>Statistics redirection behaviour is similar. Statistics are not printed at all if redirection is not enabled.
-     * If it is enabled then it is possible to define a statistics callback function but if you don't, they are not
-     * printed anywhere and only saved as <code>lastReceivedStatistics</code> data which can be polled with
+     * <p>When redirection is not enabled FFmpeg/FFprobe logs are printed to stderr. By enabling
+     * redirection, they are routed to Logcat and can be routed further to a callback function.
+     * <p>Statistics redirection behaviour is similar. Statistics are not printed at all if
+     * redirection is not enabled. If it is enabled then it is possible to define a statistics
+     * callback function but if you don't, they are not printed anywhere and only saved as
+     * <code>lastReceivedStatistics</code> data which can be polled with
      * {@link #getLastReceivedStatistics()}.
-     * <p>Note that redirection is enabled by default. If you do not want to use its functionality please use
-     * {@link #disableRedirection()} to disable it.
+     * <p>Note that redirection is enabled by default. If you do not want to use its functionality
+     * please use {@link #disableRedirection()} to disable it.
      */
     public static void enableRedirection() {
         enableNativeRedirection();
@@ -204,7 +212,7 @@ public class Config {
     }
 
     /**
-     * <p>Sets a callback function to redirect FFmpeg logs.
+     * <p>Sets a callback function to redirect FFmpeg/FFprobe logs.
      *
      * @param newLogCallback new log callback function or NULL to disable a previously defined callback
      */
@@ -224,32 +232,26 @@ public class Config {
     /**
      * <p>Log redirection method called by JNI/native part.
      *
-     * @param levelValue log level as defined in {@link Level}
-     * @param logMessage redirected log message
+     * @param executionId id of the execution that generated this log, 0 by default
+     * @param levelValue  log level as defined in {@link Level}
+     * @param logMessage  redirected log message
      */
-    private static void log(final int levelValue, final byte[] logMessage) {
+    private static void log(final long executionId, final int levelValue, final byte[] logMessage) {
         final Level level = Level.from(levelValue);
         final String text = new String(logMessage);
 
-        if (runningSystemCommand) {
-
-            // REDIRECT SYSTEM OUTPUT
-            if (activeLogLevel != Level.AV_LOG_QUIET && levelValue <= activeLogLevel.getValue()) {
-                systemCommandOutputReference.get().append(text);
-            }
-            return;
-        }
-
-        if (activeLogLevel == Level.AV_LOG_QUIET || levelValue > activeLogLevel.getValue()) {
+        // AV_LOG_STDERR logs are always redirected
+        if ((activeLogLevel == Level.AV_LOG_QUIET && levelValue != Level.AV_LOG_STDERR.getValue()) || levelValue > activeLogLevel.getValue()) {
             // LOG NEITHER PRINTED NOR FORWARDED
             return;
         }
 
-        // ALWAYS REDIRECT COMMAND OUTPUT
-        FFmpeg.appendCommandOutput(text);
-
         if (logCallbackFunction != null) {
-            logCallbackFunction.apply(new LogMessage(level, text));
+            try {
+                logCallbackFunction.apply(new LogMessage(executionId, level, text));
+            } catch (final Exception e) {
+                Log.e(Config.TAG, "Exception thrown inside LogCallback block", e);
+            }
         } else {
             switch (level) {
                 case AV_LOG_QUIET: {
@@ -261,6 +263,7 @@ public class Config {
                     android.util.Log.d(TAG, text);
                 }
                 break;
+                case AV_LOG_STDERR:
                 case AV_LOG_VERBOSE: {
                     android.util.Log.v(TAG, text);
                 }
@@ -290,6 +293,7 @@ public class Config {
     /**
      * <p>Statistics redirection method called by JNI/native part.
      *
+     * @param executionId      id of the execution that generated this statistics, 0 by default
      * @param videoFrameNumber last processed frame number for videos
      * @param videoFps         frames processed per second for videos
      * @param videoQuality     quality of the video stream
@@ -298,14 +302,18 @@ public class Config {
      * @param bitrate          output bit rate in kbits/s
      * @param speed            processing speed = processed duration / operation duration
      */
-    private static void statistics(final int videoFrameNumber, final float videoFps,
-                                   final float videoQuality, final long size, final int time,
-                                   final double bitrate, final double speed) {
-        final Statistics newStatistics = new Statistics(videoFrameNumber, videoFps, videoQuality, size, time, bitrate, speed);
+    private static void statistics(final long executionId, final int videoFrameNumber,
+                                   final float videoFps, final float videoQuality, final long size,
+                                   final int time, final double bitrate, final double speed) {
+        final Statistics newStatistics = new Statistics(executionId, videoFrameNumber, videoFps, videoQuality, size, time, bitrate, speed);
         lastReceivedStatistics.update(newStatistics);
 
         if (statisticsCallbackFunction != null) {
-            statisticsCallbackFunction.apply(lastReceivedStatistics);
+            try {
+                statisticsCallbackFunction.apply(lastReceivedStatistics);
+            } catch (final Exception e) {
+                Log.e(Config.TAG, "Exception thrown inside StatisticsCallback block", e);
+            }
         }
     }
 
@@ -332,7 +340,7 @@ public class Config {
      * @return zero on success, non-zero on error
      */
     public static int setFontconfigConfigurationPath(final String path) {
-        return Config.setNativeEnvironmentVariable("FONTCONFIG_PATH", path);
+        return setNativeEnvironmentVariable("FONTCONFIG_PATH", path);
     }
 
     /**
@@ -479,69 +487,6 @@ public class Config {
     }
 
     /**
-     * Executes system command. System command is not logged to output.
-     *
-     * @param arguments                   command arguments
-     * @param commandOutputEndPatternList list of patterns which will indicate that operation has ended
-     * @param successPattern              success pattern
-     * @param timeout                     execution timeout
-     * @return return code
-     */
-    static int systemExecute(final String[] arguments, final List<String> commandOutputEndPatternList, final String successPattern, final long timeout) {
-        if (successPattern != null) {
-            commandOutputEndPatternList.add(successPattern);
-        }
-        systemCommandOutputReference.set(new StringBuffer());
-        runningSystemCommand = true;
-
-        int rc = Config.nativeExecute(arguments);
-
-        long totalWaitTime = 0;
-
-        try {
-            while (!systemCommandOutputContainsPattern(commandOutputEndPatternList) && (totalWaitTime < timeout)) {
-                synchronized (systemCommandOutputReference) {
-                    systemCommandOutputReference.wait(20);
-                }
-                totalWaitTime += 20;
-            }
-        } catch (final InterruptedException e) {
-            Log.w(TAG, "systemExecute operation interrupted.", e);
-        }
-
-        runningSystemCommand = false;
-
-        nativeCancel();
-
-        StringBuffer stringBuffer = systemCommandOutputReference.get();
-        if ((successPattern != null) && (stringBuffer != null) && stringBuffer.toString().contains(successPattern)) {
-            return 0;
-        } else {
-            return rc;
-        }
-    }
-
-    private static boolean systemCommandOutputContainsPattern(final List<String> patternList) {
-        String string = systemCommandOutputReference.get().toString();
-        for (String pattern : patternList) {
-            if (string.contains(pattern)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Returns output of last executed system command.
-     *
-     * @return output of last executed system command
-     */
-    static String getSystemCommandOutput() {
-        return systemCommandOutputReference.get().toString();
-    }
-
-    /**
      * Returns the list of camera ids supported.
      *
      * @param context application context
@@ -555,6 +500,170 @@ public class Config {
         }
 
         return detectedCameraIdList;
+    }
+
+    /**
+     * <p>Returns FFmpeg version bundled within the library.
+     *
+     * @return FFmpeg version
+     */
+    public static String getFFmpegVersion() {
+        return getNativeFFmpegVersion();
+    }
+
+    /**
+     * <p>Returns MobileFFmpeg library version.
+     *
+     * @return MobileFFmpeg version
+     */
+    public static String getVersion() {
+        if (isLTSBuild()) {
+            return String.format("%s-lts", getNativeVersion());
+        } else {
+            return getNativeVersion();
+        }
+    }
+
+    /**
+     * <p>Returns whether MobileFFmpeg release is a long term release or not.
+     *
+     * @return YES or NO
+     */
+    public static boolean isLTSBuild() {
+        return AbiDetect.isNativeLTSBuild();
+    }
+
+    /**
+     * <p>Returns MobileFFmpeg library build date.
+     *
+     * @return MobileFFmpeg library build date
+     */
+    public static String getBuildDate() {
+        return getNativeBuildDate();
+    }
+
+    /**
+     * <p>Returns return code of last executed command.
+     *
+     * @return return code of last executed command
+     * @since 3.0
+     */
+    public static int getLastReturnCode() {
+        return lastReturnCode;
+    }
+
+    /**
+     * <p>Returns log output of last executed single FFmpeg/FFprobe command.
+     *
+     * <p>This method does not support executing multiple concurrent commands. If you execute
+     * multiple commands at the same time, this method will return output from all executions.
+     *
+     * <p>Please note that disabling redirection using {@link Config#disableRedirection()} method
+     * also disables this functionality.
+     *
+     * @return output of the last executed command
+     * @since 3.0
+     */
+    public static String getLastCommandOutput() {
+        String nativeLastCommandOutput = getNativeLastCommandOutput();
+        if (nativeLastCommandOutput != null) {
+
+            // REPLACING CH(13) WITH CH(10)
+            nativeLastCommandOutput = nativeLastCommandOutput.replace('\r', '\n');
+        }
+        return nativeLastCommandOutput;
+    }
+
+    /**
+     * <p>Prints the output of the last executed FFmpeg/FFprobe command to the Logcat at the
+     * specified priority.
+     *
+     * <p>This method does not support executing multiple concurrent commands. If you execute
+     * multiple commands at the same time, this method will print output from all executions.
+     *
+     * @param logPriority one of {@link Log#VERBOSE}, {@link Log#DEBUG}, {@link Log#INFO},
+     *                    {@link Log#WARN}, {@link Log#ERROR}, {@link Log#ASSERT}
+     * @since 4.3
+     */
+    public static void printLastCommandOutput(int logPriority) {
+        final int LOGGER_ENTRY_MAX_LEN = 4 * 1000;
+
+        String buffer = getLastCommandOutput();
+        do {
+            if (buffer.length() <= LOGGER_ENTRY_MAX_LEN) {
+                Log.println(logPriority, Config.TAG, buffer);
+                buffer = "";
+            } else {
+                final int index = buffer.substring(0, LOGGER_ENTRY_MAX_LEN).lastIndexOf('\n');
+                if (index < 0) {
+                    Log.println(logPriority, Config.TAG, buffer.substring(0, LOGGER_ENTRY_MAX_LEN));
+                    buffer = buffer.substring(LOGGER_ENTRY_MAX_LEN);
+                } else {
+                    Log.println(logPriority, Config.TAG, buffer.substring(0, index));
+                    buffer = buffer.substring(index);
+                }
+            }
+        } while (buffer.length() > 0);
+    }
+
+    /**
+     * <p>Sets an environment variable.
+     *
+     * @param variableName  environment variable name
+     * @param variableValue environment variable value
+     * @return zero on success, non-zero on error
+     */
+    public static int setEnvironmentVariable(final String variableName, final String variableValue) {
+        return setNativeEnvironmentVariable(variableName, variableValue);
+    }
+
+    /**
+     * <p>Registers a new ignored signal. Ignored signals are not handled by the library.
+     *
+     * @param signal signal number to ignore
+     */
+    public static void ignoreSignal(final Signal signal) {
+        ignoreNativeSignal(signal.getValue());
+    }
+
+    /**
+     * <p>Synchronously executes FFmpeg with arguments provided.
+     *
+     * @param executionId id of the execution
+     * @param arguments   FFmpeg command options/arguments as string array
+     * @return zero on successful execution, 255 on user cancel and non-zero on error
+     */
+    static int ffmpegExecute(final long executionId, final String[] arguments) {
+        final FFmpegExecution currentFFmpegExecution = new FFmpegExecution(executionId, arguments);
+        executions.add(currentFFmpegExecution);
+
+        try {
+            final int lastReturnCode = nativeFFmpegExecute(executionId, arguments);
+
+            Config.setLastReturnCode(lastReturnCode);
+
+            return lastReturnCode;
+        } finally {
+            executions.remove(currentFFmpegExecution);
+        }
+    }
+
+    /**
+     * Updates return code value for the last executed command.
+     *
+     * @param newLastReturnCode new last return code value
+     */
+    static void setLastReturnCode(int newLastReturnCode) {
+        lastReturnCode = newLastReturnCode;
+    }
+
+    /**
+     * <p>Lists ongoing FFmpeg executions.
+     *
+     * @return list of ongoing FFmpeg executions
+     */
+    static List<FFmpegExecution> listFFmpegExecutions() {
+        return new ArrayList<>(executions);
     }
 
     /**
@@ -586,28 +695,39 @@ public class Config {
      *
      * @return FFmpeg version
      */
-    native static String getNativeFFmpegVersion();
+    private native static String getNativeFFmpegVersion();
 
     /**
      * <p>Returns MobileFFmpeg library version natively.
      *
      * @return MobileFFmpeg version
      */
-    native static String getNativeVersion();
+    private native static String getNativeVersion();
 
     /**
      * <p>Synchronously executes FFmpeg natively with arguments provided.
      *
-     * @param arguments FFmpeg command options/arguments as string array
+     * @param executionId id of the execution
+     * @param arguments   FFmpeg command options/arguments as string array
      * @return zero on successful execution, 255 on user cancel and non-zero on error
      */
-    native static int nativeExecute(final String[] arguments);
+    private native static int nativeFFmpegExecute(final long executionId, final String[] arguments);
 
     /**
-     * <p>Cancels an ongoing operation natively. This function does not wait for termination to
-     * complete and returns immediately.
+     * <p>Cancels an ongoing FFmpeg operation natively. This function does not wait for termination
+     * to complete and returns immediately.
+     *
+     * @param executionId id of the execution
      */
-    native static void nativeCancel();
+    native static void nativeFFmpegCancel(final long executionId);
+
+    /**
+     * <p>Synchronously executes FFprobe natively with arguments provided.
+     *
+     * @param arguments FFprobe command options/arguments as string array
+     * @return zero on successful execution, 255 on user cancel and non-zero on error
+     */
+    native static int nativeFFprobeExecute(final String[] arguments);
 
     /**
      * <p>Creates natively a new named pipe to use in <code>FFmpeg</code> operations.
@@ -617,14 +737,14 @@ public class Config {
      * @param ffmpegPipePath full path of ffmpeg pipe
      * @return zero on successful creation, non-zero on error
      */
-    native static int registerNewNativeFFmpegPipe(final String ffmpegPipePath);
+    private native static int registerNewNativeFFmpegPipe(final String ffmpegPipePath);
 
     /**
      * <p>Returns MobileFFmpeg library build date natively.
      *
      * @return MobileFFmpeg library build date
      */
-    native static String getNativeBuildDate();
+    private native static String getNativeBuildDate();
 
     /**
      * <p>Sets an environment variable natively.
@@ -633,6 +753,20 @@ public class Config {
      * @param variableValue environment variable value
      * @return zero on success, non-zero on error
      */
-    native static int setNativeEnvironmentVariable(final String variableName, final String variableValue);
+    private native static int setNativeEnvironmentVariable(final String variableName, final String variableValue);
+
+    /**
+     * <p>Returns log output of the last executed single command natively.
+     *
+     * @return output of the last executed single command
+     */
+    private native static String getNativeLastCommandOutput();
+
+    /**
+     * <p>Registers a new ignored signal natively. Ignored signals are not handled by the library.
+     *
+     * @param signum signal number
+     */
+    private native static void ignoreNativeSignal(final int signum);
 
 }

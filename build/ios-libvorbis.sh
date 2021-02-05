@@ -27,12 +27,12 @@ else
     . ${BASEDIR}/build/ios-common.sh
 fi
 
-# PREPARING PATHS & DEFINING ${INSTALL_PKG_CONFIG_DIR}
+# PREPARE PATHS & DEFINE ${INSTALL_PKG_CONFIG_DIR}
 LIB_NAME="libvorbis"
 set_toolchain_clang_paths ${LIB_NAME}
 
 # PREPARING FLAGS
-TARGET_HOST=$(get_target_host)
+BUILD_HOST=$(get_build_host)
 export CFLAGS=$(get_cflags ${LIB_NAME})
 export CXXFLAGS=$(get_cxxflags ${LIB_NAME})
 export LDFLAGS=$(get_ldflags ${LIB_NAME})
@@ -42,7 +42,7 @@ cd ${BASEDIR}/src/${LIB_NAME} || exit 1
 
 make distclean 2>/dev/null 1>/dev/null
 
-# RECONFIGURING IF REQUESTED
+# RECONFIGURE IF REQUESTED
 if [[ ${RECONF_libvorbis} -eq 1 ]]; then
     autoreconf_library ${LIB_NAME}
 fi
@@ -51,8 +51,10 @@ fi
 # ld: -force_cpusubtype_ALL and -bitcode_bundle (Xcode setting ENABLE_BITCODE=YES) cannot be used together
 ${SED_INLINE} 's/-force_cpusubtype_ALL//g' ${BASEDIR}/src/${LIB_NAME}/configure
 
-./configure \
+PKG_CONFIG= ./configure \
     --prefix=${BASEDIR}/prebuilt/$(get_target_build_directory)/${LIB_NAME} \
+    --with-ogg-includes=${BASEDIR}/prebuilt/$(get_target_build_directory)/libogg/include \
+    --with-ogg-libraries=${BASEDIR}/prebuilt/$(get_target_build_directory)/libogg/lib \
     --with-pic \
     --with-sysroot=${SDK_PATH} \
     --enable-static \
@@ -61,11 +63,11 @@ ${SED_INLINE} 's/-force_cpusubtype_ALL//g' ${BASEDIR}/src/${LIB_NAME}/configure
     --disable-docs \
     --disable-examples \
     --disable-oggtest \
-    --host=${TARGET_HOST} || exit 1
+    --host=${BUILD_HOST} || exit 1
 
 make -j$(get_cpu_count) || exit 1
 
 # CREATE PACKAGE CONFIG MANUALLY
-create_libvorbis_package_config "1.3.6"
+create_libvorbis_package_config "1.3.7"
 
 make install || exit 1

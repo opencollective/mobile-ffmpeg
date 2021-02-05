@@ -23,12 +23,12 @@ fi
 # ENABLE COMMON FUNCTIONS
 . ${BASEDIR}/build/android-common.sh
 
-# PREPARING PATHS & DEFINING ${INSTALL_PKG_CONFIG_DIR}
+# PREPARE PATHS & DEFINE ${INSTALL_PKG_CONFIG_DIR}
 LIB_NAME="libvorbis"
 set_toolchain_clang_paths ${LIB_NAME}
 
 # PREPARING FLAGS
-TARGET_HOST=$(get_target_host)
+BUILD_HOST=$(get_build_host)
 export CFLAGS=$(get_cflags ${LIB_NAME})
 export CXXFLAGS=$(get_cxxflags ${LIB_NAME})
 export LDFLAGS=$(get_ldflags ${LIB_NAME})
@@ -43,7 +43,7 @@ ${SED_INLINE} 's/\-mno-ieee-fp//g' ${BASEDIR}/src/${LIB_NAME}/configure.ac
 # ALWAYS RECONFIGURE
 autoreconf_library ${LIB_NAME}
 
-./configure \
+PKG_CONFIG= ./configure \
     --prefix=${BASEDIR}/prebuilt/android-$(get_target_build)/${LIB_NAME} \
     --with-pic \
     --with-sysroot=${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/sysroot \
@@ -55,11 +55,11 @@ autoreconf_library ${LIB_NAME}
     --disable-docs \
     --disable-examples \
     --disable-oggtest \
-    --host=${TARGET_HOST} || exit 1
+    --host=${BUILD_HOST} || exit 1
 
 make -j$(get_cpu_count) || exit 1
 
 # CREATE PACKAGE CONFIG MANUALLY
-create_libvorbis_package_config "1.3.6"
+create_libvorbis_package_config "1.3.7"
 
 make install || exit 1

@@ -45,7 +45,8 @@ const hello_ext_entry_st ext_mod_srtp = {
 	.gid = GNUTLS_EXTENSION_SRTP,
 	.validity = GNUTLS_EXT_FLAG_TLS | GNUTLS_EXT_FLAG_DTLS | GNUTLS_EXT_FLAG_CLIENT_HELLO |
 		    GNUTLS_EXT_FLAG_EE | GNUTLS_EXT_FLAG_TLS12_SERVER_HELLO,
-	.parse_type = GNUTLS_EXT_APPLICATION,
+	.client_parse_point = GNUTLS_EXT_APPLICATION,
+	.server_parse_point = GNUTLS_EXT_APPLICATION,
 	.recv_func = _gnutls_srtp_recv_params,
 	.send_func = _gnutls_srtp_send_params,
 	.pack_func = _gnutls_srtp_pack,
@@ -162,13 +163,12 @@ const char *gnutls_srtp_get_profile_name(gnutls_srtp_profile_t profile)
 
 static int
 _gnutls_srtp_recv_params(gnutls_session_t session,
-			 const uint8_t * data, size_t _data_size)
+			 const uint8_t * data, size_t data_size)
 {
 	unsigned int i;
 	int ret;
 	const uint8_t *p = data;
-	int len;
-	ssize_t data_size = _data_size;
+	size_t len;
 	srtp_ext_st *priv;
 	gnutls_ext_priv_data_t epriv;
 	uint16_t profile;

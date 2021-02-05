@@ -39,6 +39,7 @@
 #include "tables.h"
 #include "threadqueue.h"
 #include "videoframe.h"
+#include "rate_control.h"
 
 
 static void encoder_state_write_bitstream_aud(encoder_state_t * const state)
@@ -60,7 +61,7 @@ static void encoder_state_write_bitstream_PTL(bitstream_t *stream,
   // PTL
   // Profile Tier
   WRITE_U(stream, 0, 2, "general_profile_space");
-  WRITE_U(stream, 0, 1, "general_tier_flag");
+  WRITE_U(stream, state->encoder_control->cfg.high_tier, 1, "general_tier_flag");
   // Main Profile == 1,  Main 10 profile == 2
   WRITE_U(stream, (state->encoder_control->bitdepth == 8)?1:2, 5, "general_profile_idc");
   /* Compatibility flags should be set at general_profile_idc
@@ -80,8 +81,8 @@ static void encoder_state_write_bitstream_PTL(bitstream_t *stream,
 
   // end Profile Tier
 
-  // Level 6.2 (general_level_idc is 30 * 6.2)
-  WRITE_U(stream, 186, 8, "general_level_idc");
+  uint8_t level = state->encoder_control->cfg.level;
+  WRITE_U(stream, level * 3, 8, "general_level_idc");
 
   WRITE_U(stream, 0, 1, "sub_layer_profile_present_flag");
   WRITE_U(stream, 0, 1, "sub_layer_level_present_flag");
@@ -346,8 +347,14 @@ static void encoder_state_write_bitstream_seq_parameter_set(bitstream_t* stream,
     WRITE_U(stream, 0, 1, "separate_colour_plane_flag");
   }
 
-  WRITE_UE(stream, encoder->in.width, "pic_width_in_luma_samples");
-  WRITE_UE(stream, encoder->in.height, "pic_height_in_luma_samples");
+  if (encoder->cfg.partial_coding.fullWidth != 0) {
+    WRITE_UE(stream, encoder->cfg.partial_coding.fullWidth, "pic_width_in_luma_samples");
+    WRITE_UE(stream, encoder->cfg.partial_coding.fullHeight, "pic_height_in_luma_samples");
+  }
+  else {
+    WRITE_UE(stream, encoder->in.width, "pic_width_in_luma_samples");
+    WRITE_UE(stream, encoder->in.height, "pic_height_in_luma_samples");
+  }
 
   if (encoder->in.width != encoder->in.real_width || encoder->in.height != encoder->in.real_height) {
     // The standard does not seem to allow setting conf_win values such that
@@ -371,18 +378,22 @@ static void encoder_state_write_bitstream_seq_parameter_set(bitstream_t* stream,
 
   WRITE_UE(stream, encoder->bitdepth-8, "bit_depth_luma_minus8");
   WRITE_UE(stream, encoder->bitdepth-8, "bit_depth_chroma_minus8");
-  WRITE_UE(stream, 1, "log2_max_pic_order_cnt_lsb_minus4");
+  WRITE_UE(stream, encoder->poc_lsb_bits - 4, "log2_max_pic_order_cnt_lsb_minus4");
+
   WRITE_U(stream, 0, 1, "sps_sub_layer_ordering_info_present_flag");
 
   //for each layer
   if (encoder->cfg.gop_lowdelay) {
-    WRITE_UE(stream, encoder->cfg.ref_frames, "sps_max_dec_pic_buffering");
-    WRITE_UE(stream, 0, "sps_num_reorder_pics");
+    const int dpb = encoder->cfg.ref_frames;
+    WRITE_UE(stream, dpb - 1, "sps_max_dec_pic_buffering_minus1");
+    WRITE_UE(stream, 0, "sps_max_num_reorder_pics");
   } else {
-    WRITE_UE(stream, encoder->cfg.ref_frames + encoder->cfg.gop_len, "sps_max_dec_pic_buffering");
-    WRITE_UE(stream, encoder->cfg.gop_len, "sps_num_reorder_pics");
+    // Clip to non-negative values to prevent problems with GOP=0
+    const int dpb = MIN(16, encoder->cfg.gop_len);
+    WRITE_UE(stream, MAX(dpb - 1, 0), "sps_max_dec_pic_buffering_minus1");
+    WRITE_UE(stream, MAX(encoder->cfg.gop_len - 1, 0), "sps_max_num_reorder_pics");
   }
-  WRITE_UE(stream, 0, "sps_max_latency_increase");
+  WRITE_UE(stream, 0, "sps_max_latency_increase_plus1");
   //end for
 
   WRITE_UE(stream, MIN_SIZE-3, "log2_min_coding_block_size_minus3");
@@ -395,8 +406,11 @@ static void encoder_state_write_bitstream_seq_parameter_set(bitstream_t* stream,
   // scaling list
   WRITE_U(stream, encoder->scaling_list.enable, 1, "scaling_list_enable_flag");
   if (encoder->scaling_list.enable) {
-    WRITE_U(stream, 1, 1, "sps_scaling_list_data_present_flag");
-    encoder_state_write_bitstream_scaling_list(stream, state);
+    // Signal scaling list data for custom lists
+    WRITE_U(stream, (encoder->cfg.scaling_list == KVZ_SCALING_LIST_CUSTOM) ? 1 : 0, 1, "sps_scaling_list_data_present_flag");
+    if (encoder->cfg.scaling_list == KVZ_SCALING_LIST_CUSTOM) {
+      encoder_state_write_bitstream_scaling_list(stream, state);
+    }
   }
 
   WRITE_U(stream, (encoder->cfg.amp_enable ? 1 : 0), 1, "amp_enabled_flag");
@@ -451,16 +465,21 @@ static void encoder_state_write_bitstream_pic_parameter_set(bitstream_t* stream,
 
   WRITE_UE(stream, 0, "num_ref_idx_l0_default_active_minus1");
   WRITE_UE(stream, 0, "num_ref_idx_l1_default_active_minus1");
-  WRITE_SE(stream, ((int8_t)encoder->cfg.qp) - 26, "pic_init_qp_minus26");
+  
+  // If tiles and slices = tiles is enabled, signal QP in the slice header. Keeping the PPS constant for OMAF etc
+  // Keep QP constant here also if it will be only set at CU level.
+  bool constant_qp_in_pps = ((encoder->cfg.slices & KVZ_SLICES_TILES) && encoder->tiles_enable) || encoder->cfg.set_qp_in_cu;
+  WRITE_SE(stream, constant_qp_in_pps ? 0 : (((int8_t)encoder->cfg.qp) - 26), "pic_init_qp_minus26");
+
   WRITE_U(stream, 0, 1, "constrained_intra_pred_flag");
   WRITE_U(stream, encoder->cfg.trskip_enable, 1, "transform_skip_enabled_flag");
 
-  if (encoder->lcu_dqp_enabled) {
+  if (encoder->max_qp_delta_depth >= 0) {
     // Use separate QP for each LCU when rate control is enabled.
     WRITE_U(stream, 1, 1, "cu_qp_delta_enabled_flag");
-    WRITE_UE(stream, 0, "diff_cu_qp_delta_depth");
+    WRITE_UE(stream, encoder->max_qp_delta_depth, "diff_cu_qp_delta_depth");
   } else {
-  WRITE_U(stream, 0, 1, "cu_qp_delta_enabled_flag");
+    WRITE_U(stream, 0, 1, "cu_qp_delta_enabled_flag");
   }
 
   //TODO: add QP offsets
@@ -701,16 +720,18 @@ static void kvz_encoder_state_write_bitstream_slice_header_independent(
   if (state->frame->pictype != KVZ_NAL_IDR_W_RADL
       && state->frame->pictype != KVZ_NAL_IDR_N_LP)
   {
+    const int poc_lsb = state->frame->poc & ((1 << encoder->poc_lsb_bits) - 1);
+    WRITE_U(stream, poc_lsb, encoder->poc_lsb_bits, "pic_order_cnt_lsb");
+
     int last_poc = 0;
     int poc_shift = 0;
 
-      WRITE_U(stream, state->frame->poc&0x1f, 5, "pic_order_cnt_lsb");
-      WRITE_U(stream, 0, 1, "short_term_ref_pic_set_sps_flag");
-      WRITE_UE(stream, ref_negative, "num_negative_pics");
-      WRITE_UE(stream, ref_positive, "num_positive_pics");
-    for (j = 0; j < ref_negative; j++) {      
+    WRITE_U(stream, 0, 1, "short_term_ref_pic_set_sps_flag");
+    WRITE_UE(stream, ref_negative, "num_negative_pics");
+    WRITE_UE(stream, ref_positive, "num_positive_pics");
+    for (j = 0; j < ref_negative; j++) {
       int8_t delta_poc = 0;
-      
+
       if (encoder->cfg.gop_len) {
         int8_t found = 0;
         do {
@@ -777,12 +798,12 @@ static void kvz_encoder_state_write_bitstream_slice_header_independent(
       WRITE_U(stream, 1, 1, "slice_sao_chroma_flag");
     }
   }
-    
+
   if (state->frame->slicetype != KVZ_SLICE_I) {
       WRITE_U(stream, 1, 1, "num_ref_idx_active_override_flag");
-      WRITE_UE(stream, ref_negative != 0 ? ref_negative - 1: 0, "num_ref_idx_l0_active_minus1");
+      WRITE_UE(stream, MAX(0, ((int)state->frame->ref_LX_size[0]) - 1), "num_ref_idx_l0_active_minus1");
       if (state->frame->slicetype == KVZ_SLICE_B) {
-        WRITE_UE(stream, ref_positive != 0 ? ref_positive - 1 : 0, "num_ref_idx_l1_active_minus1");
+        WRITE_UE(stream, MAX(0, ((int)state->frame->ref_LX_size[1]) - 1), "num_ref_idx_l1_active_minus1");
         WRITE_U(stream, 0, 1, "mvd_l1_zero_flag");
       }
 
@@ -799,12 +820,16 @@ static void kvz_encoder_state_write_bitstream_slice_header_independent(
           WRITE_UE(stream, 0, "collocated_ref_idx");
         }
       }
-
-      WRITE_UE(stream, 5-MRG_MAX_NUM_CANDS, "five_minus_max_num_merge_cand");
+      const uint8_t max_merge_cands = state->encoder_control->cfg.max_merge;
+      WRITE_UE(stream, 5- max_merge_cands, "five_minus_max_num_merge_cand");
   }
 
   {
-    int slice_qp_delta = state->frame->QP - encoder->cfg.qp;
+    // If tiles are enabled, signal the full QP here (relative to the base value of 26)
+    // If QP is to be set only at CU level, force slice_qp_delta zero
+    bool signal_qp_in_slice_header = (encoder->cfg.slices & KVZ_SLICES_TILES) && encoder->tiles_enable;
+    int slice_qp_delta = state->frame->QP - (signal_qp_in_slice_header ? 26 : encoder->cfg.qp);
+    if(encoder->cfg.set_qp_in_cu) slice_qp_delta = 0;
     WRITE_SE(stream, slice_qp_delta, "slice_qp_delta");
   }
 }
@@ -819,6 +844,11 @@ void kvz_encoder_state_write_bitstream_slice_header(
 #ifdef KVZ_DEBUG
   printf("=========== Slice ===========\n");
 #endif
+
+  if (encoder->cfg.partial_coding.fullWidth != 0) {
+    state->slice->start_in_rs = encoder->cfg.partial_coding.startCTU_x +
+      CEILDIV(encoder->cfg.partial_coding.fullWidth, 64) * encoder->cfg.partial_coding.startCTU_y;
+  }
 
   bool first_slice_segment_in_pic = (state->slice->start_in_rs == 0);
   if ((state->encoder_control->cfg.slices & KVZ_SLICES_WPP)
@@ -842,6 +872,9 @@ void kvz_encoder_state_write_bitstream_slice_header(
     }
 
     int lcu_cnt = encoder->in.width_in_lcu * encoder->in.height_in_lcu;
+    if (encoder->cfg.partial_coding.fullWidth != 0) {
+      lcu_cnt = CEILDIV(encoder->cfg.partial_coding.fullWidth, 64) * CEILDIV(encoder->cfg.partial_coding.fullHeight, 64);
+    }
     int num_bits = kvz_math_ceil_log2(lcu_cnt);
     int slice_start_rs = state->slice->start_in_rs;
     if (state->encoder_control->cfg.slices & KVZ_SLICES_WPP) {
@@ -1031,8 +1064,11 @@ static void encoder_state_write_bitstream_main(encoder_state_t * const state)
     state->frame->total_bits_coded = state->previous_encoder_state->frame->total_bits_coded;
   }
   state->frame->total_bits_coded += newpos - curpos;
+  if(state->encoder_control->cfg.rc_algorithm == KVZ_OBA) {
+    kvz_update_after_picture(state);
+  }
 
-    state->frame->cur_gop_bits_coded = state->previous_encoder_state->frame->cur_gop_bits_coded;
+  state->frame->cur_gop_bits_coded = state->previous_encoder_state->frame->cur_gop_bits_coded;
   state->frame->cur_gop_bits_coded += newpos - curpos;
 }
 

@@ -1100,7 +1100,7 @@ gnutls_x509_crq_get_spki(gnutls_x509_crq_t crq,
  * @oid_size: initially holds the size of @oid
  *
  * This function will return the OID of the signature algorithm
- * that has been used to sign this certificate request. This is function
+ * that has been used to sign this certificate request. This function
  * is useful in the case gnutls_x509_crq_get_signature_algorithm()
  * returned %GNUTLS_SIGN_UNKNOWN.
  *
@@ -1140,7 +1140,7 @@ int gnutls_x509_crq_get_signature_oid(gnutls_x509_crq_t crq, char *oid, size_t *
  * @oid_size: initially holds the size of @oid
  *
  * This function will return the OID of the public key algorithm
- * on that certificate request. This is function
+ * on that certificate request. This function
  * is useful in the case gnutls_x509_crq_get_pk_algorithm()
  * returned %GNUTLS_PK_UNKNOWN.
  *
@@ -2641,6 +2641,8 @@ gnutls_x509_crq_privkey_sign(gnutls_x509_crq_t crq, gnutls_privkey_t key,
 	se = _gnutls_pk_to_sign_entry(params.pk, dig);
 	if (se == NULL)
 		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+
+	FIX_SIGN_PARAMS(params, flags, dig);
 
 	result = privkey_sign_and_hash_data(key, se,
 					    &tbs, &signature, &params);

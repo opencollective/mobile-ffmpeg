@@ -55,6 +55,7 @@ typedef struct {
 	gnutls_mac_output_func output;
 	gnutls_mac_deinit_func deinit;
 	gnutls_mac_fast_func fast;
+	gnutls_mac_copy_func copy;
 
 	/* Not needed for registered on run-time. Only included
 	 * should define it. */
@@ -67,11 +68,28 @@ typedef struct {
 	gnutls_digest_output_func output;
 	gnutls_digest_deinit_func deinit;
 	gnutls_digest_fast_func fast;
+	gnutls_digest_copy_func copy;
 
 	/* Not needed for registered on run-time. Only included
 	 * should define it. */
 	int (*exists) (gnutls_digest_algorithm_t);
 } gnutls_crypto_digest_st;
+
+typedef struct {
+	int (*hkdf_extract) (gnutls_mac_algorithm_t,
+			     const void *key, size_t keysize,
+			     const void *salt, size_t saltsize,
+			     void *output);
+	int (*hkdf_expand) (gnutls_mac_algorithm_t,
+			    const void *key, size_t keysize,
+			    const void *info, size_t infosize,
+			    void *output, size_t length);
+	int (*pbkdf2) (gnutls_mac_algorithm_t,
+		       const void *key, size_t keysize,
+		       const void *salt, size_t saltsize,
+		       unsigned iter_count,
+		       void *output, size_t length);
+} gnutls_crypto_kdf_st;
 
 typedef struct gnutls_crypto_rnd {
 	int (*init) (void **ctx); /* called prior to first usage of randomness */
@@ -185,6 +203,13 @@ typedef struct gnutls_x509_spki_st {
 	/* if non-zero, the legacy value for PKCS#7 signatures will be
 	 * written for RSA signatures. */
 	unsigned int legacy;
+
+	/* the digest used by ECDSA/DSA */
+	gnutls_digest_algorithm_t dsa_dig;
+
+	/* flags may include GNUTLS_PK_FLAG_REPRODUCIBLE for
+	 * deterministic ECDSA/DSA */
+	unsigned int flags;
 } gnutls_x509_spki_st;
 
 #define GNUTLS_MAX_PK_PARAMS 16
@@ -217,9 +242,16 @@ typedef struct {
  */
 typedef enum {
 	GNUTLS_PK_FLAG_NONE = 0,
-	GNUTLS_PK_FLAG_PROVABLE = 1
+	GNUTLS_PK_FLAG_PROVABLE = 1,
+	GNUTLS_PK_FLAG_REPRODUCIBLE = 2
 } gnutls_pk_flag_t;
 
+#define FIX_SIGN_PARAMS(params, flags, dig) do {		\
+	if ((flags) & GNUTLS_PRIVKEY_FLAG_REPRODUCIBLE) {	\
+		(params).flags |= GNUTLS_PK_FLAG_REPRODUCIBLE;	\
+		(params).dsa_dig = (dig);			\
+	}							\
+} while (0)
 
 void gnutls_pk_params_release(gnutls_pk_params_st * p);
 void gnutls_pk_params_clear(gnutls_pk_params_st * p);
@@ -381,6 +413,7 @@ typedef struct gnutls_crypto_pk {
 	int (*derive) (gnutls_pk_algorithm_t, gnutls_datum_t * out,
 		       const gnutls_pk_params_st * priv,
 		       const gnutls_pk_params_st * pub,
+		       const gnutls_datum_t *nonce,
 		       unsigned int flags);
 
 	int (*curve_exists) (gnutls_ecc_curve_t);	/* true/false */
@@ -416,5 +449,19 @@ _gnutls_prf_raw(gnutls_mac_algorithm_t mac,
 		size_t label_size, const char *label,
 		size_t seed_size, const uint8_t *seed, size_t outsize,
 		char *out);
+
+int _gnutls_gost_key_wrap(gnutls_gost_paramset_t gost_params,
+			  const gnutls_datum_t *kek,
+			  const gnutls_datum_t *ukm,
+			  const gnutls_datum_t *cek,
+			  gnutls_datum_t *enc,
+			  gnutls_datum_t *imit);
+
+int _gnutls_gost_key_unwrap(gnutls_gost_paramset_t gost_params,
+			    const gnutls_datum_t *kek,
+			    const gnutls_datum_t *ukm,
+			    const gnutls_datum_t *enc,
+			    const gnutls_datum_t *imit,
+			    gnutls_datum_t *cek);
 
 #endif /* GNUTLS_LIB_CRYPTO_BACKEND_H */

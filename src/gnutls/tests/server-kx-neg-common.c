@@ -38,6 +38,8 @@ typedef struct test_case_st {
 	unsigned have_ecc_sign_cert;
 	unsigned have_ed25519_sign_cert;
 	unsigned have_rsa_decrypt_cert;
+	unsigned have_gost12_256_cert;
+	unsigned have_gost12_512_cert;
 	unsigned not_on_fips;
 	unsigned exp_version;
 	const char *client_prio;
@@ -77,6 +79,14 @@ gnutls_datum_t test1_salt =
 	.data = (void*)SALT_TEST1,
 	.size = sizeof(SALT_TEST1)-1
 };
+
+const char *side;
+#define switch_side(str) side = str
+
+static void tls_log_func(int level, const char *str)
+{
+	fprintf(stderr, "%s|<%d>| %s", side, level, str);
+}
 
 static int
 serv_srp_func(gnutls_session_t session, const char *username,
@@ -135,6 +145,11 @@ static void try(test_case_st *test)
 	}
 
 	success("Running %s...\n", test->name);
+
+	/* General init. */
+	gnutls_global_set_log_function(tls_log_func);
+	if (debug)
+		gnutls_global_set_log_level(6);
 
 	assert(gnutls_anon_allocate_client_credentials(&c_anon_cred) >= 0);
 	assert(gnutls_anon_allocate_server_credentials(&s_anon_cred) >= 0);
@@ -207,6 +222,14 @@ static void try(test_case_st *test)
 
 	if (test->have_rsa_sign_cert) {
 		assert(gnutls_certificate_set_x509_key_mem(s_cert_cred, &server_ca3_localhost_rsa_sign_cert, &server_ca3_key, GNUTLS_X509_FMT_PEM) >= 0);
+	}
+
+	if (test->have_gost12_256_cert) {
+		assert(gnutls_certificate_set_x509_key_mem(s_cert_cred, &server_ca3_gost12_256_cert, &server_ca3_gost12_256_key, GNUTLS_X509_FMT_PEM) >= 0);
+	}
+
+	if (test->have_gost12_512_cert) {
+		assert(gnutls_certificate_set_x509_key_mem(s_cert_cred, &server_ca3_gost12_512_cert, &server_ca3_gost12_512_key, GNUTLS_X509_FMT_PEM) >= 0);
 	}
 
 	/* client does everything */

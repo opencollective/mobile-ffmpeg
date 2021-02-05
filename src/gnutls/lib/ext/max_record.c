@@ -46,7 +46,8 @@ const hello_ext_entry_st ext_mod_max_record_size = {
 	.name = "Maximum Record Size",
 	.tls_id = 1,
 	.gid = GNUTLS_EXTENSION_MAX_RECORD_SIZE,
-	.parse_type = GNUTLS_EXT_TLS,
+	.client_parse_point = GNUTLS_EXT_TLS,
+	.server_parse_point = GNUTLS_EXT_TLS,
 	.validity = GNUTLS_EXT_FLAG_TLS | GNUTLS_EXT_FLAG_DTLS | GNUTLS_EXT_FLAG_CLIENT_HELLO |
 		    GNUTLS_EXT_FLAG_EE | GNUTLS_EXT_FLAG_TLS12_SERVER_HELLO,
 	.recv_func = _gnutls_max_record_recv_params,
@@ -65,10 +66,9 @@ const hello_ext_entry_st ext_mod_max_record_size = {
 
 static int
 _gnutls_max_record_recv_params(gnutls_session_t session,
-			       const uint8_t * data, size_t _data_size)
+			       const uint8_t * data, size_t data_size)
 {
 	ssize_t new_size;
-	ssize_t data_size = _data_size;
 
 	if (session->internals.hsk_flags & HSK_RECORD_SIZE_LIMIT_NEGOTIATED)
 		return 0;

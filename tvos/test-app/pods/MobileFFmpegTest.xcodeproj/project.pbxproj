@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		344D0D5F22DE3E7400DC2568 /* MediaInformationParserTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 344D0D5E22DE3E7400DC2568 /* MediaInformationParserTest.m */; };
+		344D0D6222DE3E7B00DC2568 /* MobileFFmpegTest.m in Sources */ = {isa = PBXBuildFile; fileRef = 344D0D6122DE3E7B00DC2568 /* MobileFFmpegTest.m */; };
+		345E16AE24CB9C1B007275F0 /* ConcurrentExecutionViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 345E16AD24CB9C1B007275F0 /* ConcurrentExecutionViewController.m */; };
 		34695E8A22AD292100889D20 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 34695E8922AD292100889D20 /* AppDelegate.m */; };
 		34695E9022AD292100889D20 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 34695E8E22AD292100889D20 /* Main.storyboard */; };
 		34695E9222AD292300889D20 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 34695E9122AD292300889D20 /* Assets.xcassets */; };
@@ -15,7 +18,6 @@
 		34695EBE22AD440800889D20 /* CommandViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 34695EBB22AD440800889D20 /* CommandViewController.m */; };
 		34695EBF22AD440800889D20 /* HttpsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 34695EBC22AD440800889D20 /* HttpsViewController.m */; };
 		34695EC022AD440800889D20 /* Constants.m in Sources */ = {isa = PBXBuildFile; fileRef = 34695EBD22AD440800889D20 /* Constants.m */; };
-		34695ECF22AD441500889D20 /* MediaInformationParserTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 34695EC222AD441400889D20 /* MediaInformationParserTests.m */; };
 		34695ED022AD441500889D20 /* SubtitleViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 34695EC322AD441400889D20 /* SubtitleViewController.m */; };
 		34695ED122AD441500889D20 /* Util.m in Sources */ = {isa = PBXBuildFile; fileRef = 34695EC522AD441400889D20 /* Util.m */; };
 		34695ED222AD441500889D20 /* TabBarController.m in Sources */ = {isa = PBXBuildFile; fileRef = 34695EC622AD441400889D20 /* TabBarController.m */; };
@@ -23,9 +25,6 @@
 		34695ED422AD441500889D20 /* VideoViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 34695ECC22AD441500889D20 /* VideoViewController.m */; };
 		34695ED522AD441500889D20 /* PipeViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 34695ECE22AD441500889D20 /* PipeViewController.m */; };
 		34C06BF922AD70C40039DF48 /* VideoToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 34C06BF822AD70C30039DF48 /* VideoToolbox.framework */; };
-		34C06BFB22AD70CD0039DF48 /* libc++.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 34C06BFA22AD70CD0039DF48 /* libc++.tbd */; };
-		34C06BFD22AD70D60039DF48 /* libbz2.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 34C06BFC22AD70D60039DF48 /* libbz2.tbd */; };
-		34C06BFF22AD70E40039DF48 /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 34C06BFE22AD70E40039DF48 /* libz.tbd */; };
 		34C06C0122AD71090039DF48 /* GameController.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 34C06C0022AD71090039DF48 /* GameController.framework */; };
 		34C06C0722ADA0B10039DF48 /* TvButton.m in Sources */ = {isa = PBXBuildFile; fileRef = 34C06C0622ADA0B10039DF48 /* TvButton.m */; };
 		34C06C0822ADAA4E0039DF48 /* colosseum.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 348439EC20B2EFAF001A3990 /* colosseum.jpg */; };
@@ -40,6 +39,12 @@
 
 /* Begin PBXFileReference section */
 		16D78EA26D841ECC049E94F2 /* Pods-MobileFFmpegTest-tvOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MobileFFmpegTest-tvOS.release.xcconfig"; path = "Target Support Files/Pods-MobileFFmpegTest-tvOS/Pods-MobileFFmpegTest-tvOS.release.xcconfig"; sourceTree = "<group>"; };
+		344D0D5D22DE3E7400DC2568 /* MediaInformationParserTest.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MediaInformationParserTest.h; sourceTree = "<group>"; };
+		344D0D5E22DE3E7400DC2568 /* MediaInformationParserTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MediaInformationParserTest.m; sourceTree = "<group>"; };
+		344D0D6022DE3E7B00DC2568 /* MobileFFmpegTest.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MobileFFmpegTest.h; sourceTree = "<group>"; };
+		344D0D6122DE3E7B00DC2568 /* MobileFFmpegTest.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MobileFFmpegTest.m; sourceTree = "<group>"; };
+		345E16AC24CB9C1B007275F0 /* ConcurrentExecutionViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ConcurrentExecutionViewController.h; sourceTree = "<group>"; };
+		345E16AD24CB9C1B007275F0 /* ConcurrentExecutionViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ConcurrentExecutionViewController.m; sourceTree = "<group>"; };
 		34695E8622AD292000889D20 /* MobileFFmpegTest-tvOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "MobileFFmpegTest-tvOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		34695E8822AD292100889D20 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		34695E8922AD292100889D20 /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
@@ -56,7 +61,6 @@
 		34695EBC22AD440800889D20 /* HttpsViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = HttpsViewController.m; sourceTree = "<group>"; };
 		34695EBD22AD440800889D20 /* Constants.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Constants.m; sourceTree = "<group>"; };
 		34695EC122AD441400889D20 /* Util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Util.h; sourceTree = "<group>"; };
-		34695EC222AD441400889D20 /* MediaInformationParserTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MediaInformationParserTests.m; sourceTree = "<group>"; };
 		34695EC322AD441400889D20 /* SubtitleViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SubtitleViewController.m; sourceTree = "<group>"; };
 		34695EC422AD441400889D20 /* TabBarController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TabBarController.h; sourceTree = "<group>"; };
 		34695EC522AD441400889D20 /* Util.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = Util.m; sourceTree = "<group>"; };
@@ -65,7 +69,6 @@
 		34695EC822AD441400889D20 /* PipeViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PipeViewController.h; sourceTree = "<group>"; };
 		34695EC922AD441400889D20 /* VidStabViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = VidStabViewController.h; sourceTree = "<group>"; };
 		34695ECA22AD441400889D20 /* VidStabViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = VidStabViewController.m; sourceTree = "<group>"; };
-		34695ECB22AD441400889D20 /* MediaInformationParserTests.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MediaInformationParserTests.h; sourceTree = "<group>"; };
 		34695ECC22AD441500889D20 /* VideoViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = VideoViewController.m; sourceTree = "<group>"; };
 		34695ECD22AD441500889D20 /* VideoViewController.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = VideoViewController.h; sourceTree = "<group>"; };
 		34695ECE22AD441500889D20 /* PipeViewController.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PipeViewController.m; sourceTree = "<group>"; };
@@ -93,9 +96,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				34C06C0122AD71090039DF48 /* GameController.framework in Frameworks */,
-				34C06BFF22AD70E40039DF48 /* libz.tbd in Frameworks */,
-				34C06BFD22AD70D60039DF48 /* libbz2.tbd in Frameworks */,
-				34C06BFB22AD70CD0039DF48 /* libc++.tbd in Frameworks */,
 				34C06BF922AD70C40039DF48 /* VideoToolbox.framework in Frameworks */,
 				8300A9F1BC4406077B47F574 /* Pods_MobileFFmpegTest_tvOS.framework in Frameworks */,
 			);
@@ -114,6 +114,8 @@
 				34695EB522AD43F900889D20 /* AudioViewController.m */,
 				34695EB922AD440800889D20 /* CommandViewController.h */,
 				34695EBB22AD440800889D20 /* CommandViewController.m */,
+				345E16AC24CB9C1B007275F0 /* ConcurrentExecutionViewController.h */,
+				345E16AD24CB9C1B007275F0 /* ConcurrentExecutionViewController.m */,
 				34695EB822AD440800889D20 /* Constants.h */,
 				34695EBD22AD440800889D20 /* Constants.m */,
 				34695EBA22AD440800889D20 /* HttpsViewController.h */,
@@ -121,8 +123,10 @@
 				34695E9322AD292300889D20 /* Info.plist */,
 				34695E9422AD292300889D20 /* main.m */,
 				34695E8E22AD292100889D20 /* Main.storyboard */,
-				34695ECB22AD441400889D20 /* MediaInformationParserTests.h */,
-				34695EC222AD441400889D20 /* MediaInformationParserTests.m */,
+				344D0D5D22DE3E7400DC2568 /* MediaInformationParserTest.h */,
+				344D0D5E22DE3E7400DC2568 /* MediaInformationParserTest.m */,
+				344D0D6022DE3E7B00DC2568 /* MobileFFmpegTest.h */,
+				344D0D6122DE3E7B00DC2568 /* MobileFFmpegTest.m */,
 				34695EC822AD441400889D20 /* PipeViewController.h */,
 				34695ECE22AD441500889D20 /* PipeViewController.m */,
 				34695EC722AD441400889D20 /* SubtitleViewController.h */,
@@ -299,9 +303,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				344D0D5F22DE3E7400DC2568 /* MediaInformationParserTest.m in Sources */,
 				34695EBF22AD440800889D20 /* HttpsViewController.m in Sources */,
 				34C06C0722ADA0B10039DF48 /* TvButton.m in Sources */,
 				34695EB722AD43F900889D20 /* AudioViewController.m in Sources */,
+				345E16AE24CB9C1B007275F0 /* ConcurrentExecutionViewController.m in Sources */,
 				34695E9522AD292300889D20 /* main.m in Sources */,
 				34695EBE22AD440800889D20 /* CommandViewController.m in Sources */,
 				34695ED222AD441500889D20 /* TabBarController.m in Sources */,
@@ -310,9 +316,9 @@
 				34695EC022AD440800889D20 /* Constants.m in Sources */,
 				34695ED022AD441500889D20 /* SubtitleViewController.m in Sources */,
 				34695ED522AD441500889D20 /* PipeViewController.m in Sources */,
-				34695ECF22AD441500889D20 /* MediaInformationParserTests.m in Sources */,
 				34695ED422AD441500889D20 /* VideoViewController.m in Sources */,
 				34695E8A22AD292100889D20 /* AppDelegate.m in Sources */,
+				344D0D6222DE3E7B00DC2568 /* MobileFFmpegTest.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -338,6 +344,7 @@
 				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = 98GD5J4999;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -363,6 +370,7 @@
 				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = 98GD5J4999;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",

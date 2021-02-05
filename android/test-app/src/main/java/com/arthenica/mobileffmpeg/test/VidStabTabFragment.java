@@ -23,78 +23,69 @@ import android.app.AlertDialog;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
-import android.support.v4.app.Fragment;
-import android.view.LayoutInflater;
+import android.util.Log;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.MediaController;
 import android.widget.VideoView;
+
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.fragment.app.Fragment;
 
 import com.arthenica.mobileffmpeg.Config;
 import com.arthenica.mobileffmpeg.LogCallback;
 import com.arthenica.mobileffmpeg.LogMessage;
-import com.arthenica.mobileffmpeg.util.ExecuteCallback;
+import com.arthenica.mobileffmpeg.util.DialogUtil;
+import com.arthenica.mobileffmpeg.util.ResourcesUtil;
+import com.arthenica.mobileffmpeg.ExecuteCallback;
+import com.arthenica.smartexception.java.Exceptions;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.Callable;
 
-import static com.arthenica.mobileffmpeg.FFmpeg.RETURN_CODE_SUCCESS;
+import static com.arthenica.mobileffmpeg.Config.RETURN_CODE_SUCCESS;
 import static com.arthenica.mobileffmpeg.test.MainActivity.TAG;
 
 public class VidStabTabFragment extends Fragment {
 
-    private MainActivity mainActivity;
     private VideoView videoView;
     private VideoView stabilizedVideoView;
     private AlertDialog createProgressDialog;
     private AlertDialog stabilizeProgressDialog;
 
-    @Override
-    public View onCreateView(@NonNull final LayoutInflater inflater, final ViewGroup container, final Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.fragment_vidstab_tab, container, false);
+    public VidStabTabFragment() {
+        super(R.layout.fragment_vidstab_tab);
     }
 
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        if (getView() != null) {
-            View stabilizeVideoButton = getView().findViewById(R.id.stabilizeVideoButton);
-            stabilizeVideoButton.setOnClickListener(new View.OnClickListener() {
+        View stabilizeVideoButton = view.findViewById(R.id.stabilizeVideoButton);
+        stabilizeVideoButton.setOnClickListener(new View.OnClickListener() {
 
-                @Override
-                public void onClick(View v) {
-                    stabilizeVideo();
-                }
-            });
+            @Override
+            public void onClick(View v) {
+                stabilizeVideo();
+            }
+        });
 
-            videoView = getView().findViewById(R.id.videoPlayerFrame);
-            stabilizedVideoView = getView().findViewById(R.id.stabilizedVideoPlayerFrame);
-        }
+        videoView = view.findViewById(R.id.videoPlayerFrame);
+        stabilizedVideoView = view.findViewById(R.id.stabilizedVideoPlayerFrame);
 
-        createProgressDialog = mainActivity.createProgressDialog("Creating video");
-        stabilizeProgressDialog = mainActivity.createProgressDialog("Stabilizing video");
+        createProgressDialog = DialogUtil.createProgressDialog(requireContext(), "Creating video");
+        stabilizeProgressDialog = DialogUtil.createProgressDialog(requireContext(), "Stabilizing video");
     }
 
     @Override
-    public void setUserVisibleHint(boolean isVisibleToUser) {
-        super.setUserVisibleHint(isVisibleToUser);
-        if (isVisibleToUser) {
-            setActive();
-        }
+    public void onResume() {
+        super.onResume();
+        setActive();
     }
 
-    public void setMainActivity(MainActivity mainActivity) {
-        this.mainActivity = mainActivity;
-    }
-
-    public static VidStabTabFragment newInstance(final MainActivity mainActivity) {
-        final VidStabTabFragment fragment = new VidStabTabFragment();
-        fragment.setMainActivity(mainActivity);
-        return fragment;
+    public static VidStabTabFragment newInstance() {
+        return new VidStabTabFragment();
     }
 
     public void enableLogCallback() {
@@ -102,15 +93,15 @@ public class VidStabTabFragment extends Fragment {
 
             @Override
             public void apply(LogMessage message) {
-                android.util.Log.d(MainActivity.TAG, message.getText());
+                Log.d(MainActivity.TAG, message.getText());
             }
         });
     }
 
     public void stabilizeVideo() {
-        final File image1File = new File(mainActivity.getCacheDir(), "colosseum.jpg");
-        final File image2File = new File(mainActivity.getCacheDir(), "pyramid.jpg");
-        final File image3File = new File(mainActivity.getCacheDir(), "tajmahal.jpg");
+        final File image1File = new File(requireContext().getCacheDir(), "colosseum.jpg");
+        final File image2File = new File(requireContext().getCacheDir(), "pyramid.jpg");
+        final File image3File = new File(requireContext().getCacheDir(), "tajmahal.jpg");
         final File shakeResultsFile = getShakeResultsFile();
         final File videoFile = getVideoFile();
         final File stabilizedVideoFile = getStabilizedVideoFile();
@@ -131,70 +122,70 @@ public class VidStabTabFragment extends Fragment {
                 stabilizedVideoFile.delete();
             }
 
-            android.util.Log.d(TAG, "Testing VID.STAB");
+            Log.d(TAG, "Testing VID.STAB");
 
             showCreateProgressDialog();
 
-            mainActivity.resourceToFile(R.drawable.colosseum, image1File);
-            mainActivity.resourceToFile(R.drawable.pyramid, image2File);
-            mainActivity.resourceToFile(R.drawable.tajmahal, image3File);
+            ResourcesUtil.resourceToFile(getResources(), R.drawable.colosseum, image1File);
+            ResourcesUtil.resourceToFile(getResources(), R.drawable.pyramid, image2File);
+            ResourcesUtil.resourceToFile(getResources(), R.drawable.tajmahal, image3File);
 
             final String ffmpegCommand = Video.generateShakingVideoScript(image1File.getAbsolutePath(), image2File.getAbsolutePath(), image3File.getAbsolutePath(), videoFile.getAbsolutePath());
 
-            android.util.Log.d(TAG, String.format("FFmpeg process started with arguments\n'%s'", ffmpegCommand));
+            Log.d(TAG, String.format("FFmpeg process started with arguments\n'%s'.", ffmpegCommand));
 
             MainActivity.executeAsync(new ExecuteCallback() {
 
                 @Override
-                public void apply(final int returnCode, final String commandOutput) {
-                    android.util.Log.d(TAG, String.format("FFmpeg process exited with rc %d", returnCode));
+                public void apply(final long executionId, final int returnCode) {
+                    Log.d(TAG, String.format("FFmpeg process exited with rc %d.", returnCode));
 
                     hideCreateProgressDialog();
 
-                    MainActivity.addUIAction(new Callable() {
+                    MainActivity.addUIAction(new Callable<Object>() {
 
                         @Override
                         public Object call() {
                             if (returnCode == RETURN_CODE_SUCCESS) {
 
-                                android.util.Log.d(TAG, "Create completed successfully; stabilizing video.");
+                                Log.d(TAG, "Create completed successfully; stabilizing video.");
 
                                 final String analyzeVideoCommand = String.format("-y -i %s -vf vidstabdetect=shakiness=10:accuracy=15:result=%s -f null -", videoFile.getAbsolutePath(), shakeResultsFile.getAbsolutePath());
 
                                 showStabilizeProgressDialog();
 
-                                android.util.Log.d(TAG, String.format("FFmpeg process started with arguments\n'%s'", analyzeVideoCommand));
+                                Log.d(TAG, String.format("FFmpeg process started with arguments\n'%s'.", analyzeVideoCommand));
 
                                 MainActivity.executeAsync(new ExecuteCallback() {
 
                                     @Override
-                                    public void apply(final int returnCode, final String commandOutput) {
-                                        android.util.Log.d(TAG, String.format("FFmpeg process exited with rc %d", returnCode));
+                                    public void apply(final long executionId, final int returnCode) {
+                                        Log.d(TAG, String.format("FFmpeg process exited with rc %d.", returnCode));
 
                                         if (returnCode == RETURN_CODE_SUCCESS) {
                                             final String stabilizeVideoCommand = String.format("-y -i %s -vf vidstabtransform=smoothing=30:input=%s -c:v mpeg4 %s", videoFile.getAbsolutePath(), shakeResultsFile.getAbsolutePath(), stabilizedVideoFile.getAbsolutePath());
 
-                                            android.util.Log.d(TAG, String.format("FFmpeg process started with arguments\n'%s'", stabilizeVideoCommand));
+                                            Log.d(TAG, String.format("FFmpeg process started with arguments\n'%s'.", stabilizeVideoCommand));
 
                                             MainActivity.executeAsync(new ExecuteCallback() {
 
                                                 @Override
-                                                public void apply(final int returnCode, final String commandOutput) {
-                                                    android.util.Log.d(TAG, String.format("FFmpeg process exited with rc %d", returnCode));
+                                                public void apply(final long executionId, final int returnCode) {
+                                                    Log.d(TAG, String.format("FFmpeg process exited with rc %d.", returnCode));
 
                                                     hideStabilizeProgressDialog();
 
-                                                    MainActivity.addUIAction(new Callable() {
+                                                    MainActivity.addUIAction(new Callable<Object>() {
 
                                                         @Override
                                                         public Object call() {
                                                             if (returnCode == RETURN_CODE_SUCCESS) {
-                                                                android.util.Log.d(TAG, "Stabilize video completed successfully; playing videos.");
+                                                                Log.d(TAG, "Stabilize video completed successfully; playing videos.");
                                                                 playVideo();
                                                                 playStabilizedVideo();
                                                             } else {
-                                                                Popup.show(mainActivity, "Stabilize video failed. Please check log for the details.");
-                                                                android.util.Log.d(TAG, String.format("Stabilize video failed with rc=%d", returnCode));
+                                                                Popup.show(requireContext(), "Stabilize video failed. Please check log for the details.");
+                                                                Log.d(TAG, String.format("Stabilize video failed with rc=%d.", returnCode));
                                                             }
 
                                                             return null;
@@ -205,15 +196,15 @@ public class VidStabTabFragment extends Fragment {
 
                                         } else {
                                             hideStabilizeProgressDialog();
-                                            Popup.show(mainActivity, "Stabilize video failed. Please check log for the details.");
-                                            android.util.Log.d(TAG, String.format("Stabilize video failed with rc=%d", returnCode));
+                                            Popup.show(requireContext(), "Stabilize video failed. Please check log for the details.");
+                                            Log.d(TAG, String.format("Stabilize video failed with rc=%d.", returnCode));
                                         }
                                     }
                                 }, analyzeVideoCommand);
 
                             } else {
-                                Popup.show(mainActivity, "Create video failed. Please check log for the details.");
-                                android.util.Log.d(TAG, String.format("Create failed with rc=%d", returnCode));
+                                Popup.show(requireContext(), "Create video failed. Please check log for the details.");
+                                Log.d(TAG, String.format("Create failed with rc=%d.", returnCode));
                             }
 
                             return null;
@@ -223,13 +214,13 @@ public class VidStabTabFragment extends Fragment {
             }, ffmpegCommand);
 
         } catch (IOException e) {
-            android.util.Log.e(TAG, "Stabilize video failed", e);
-            Popup.show(mainActivity, "Stabilize video failed");
+            Log.e(TAG, String.format("Stabilize video failed %s.", Exceptions.getStackTraceString(e)));
+            Popup.show(requireContext(), "Stabilize video failed");
         }
     }
 
     protected void playVideo() {
-        MediaController mediaController = new MediaController(mainActivity);
+        MediaController mediaController = new MediaController(requireContext());
         mediaController.setAnchorView(videoView);
         videoView.setVideoURI(Uri.parse("file://" + getVideoFile().getAbsolutePath()));
         videoView.setMediaController(mediaController);
@@ -253,7 +244,7 @@ public class VidStabTabFragment extends Fragment {
     }
 
     protected void playStabilizedVideo() {
-        MediaController mediaController = new MediaController(mainActivity);
+        MediaController mediaController = new MediaController(requireContext());
         mediaController.setAnchorView(stabilizedVideoView);
         stabilizedVideoView.setVideoURI(Uri.parse("file://" + getStabilizedVideoFile().getAbsolutePath()));
         stabilizedVideoView.setMediaController(mediaController);
@@ -277,21 +268,21 @@ public class VidStabTabFragment extends Fragment {
     }
 
     public File getShakeResultsFile() {
-        return new File(mainActivity.getCacheDir(), "transforms.trf");
+        return new File(requireContext().getCacheDir(), "transforms.trf");
     }
 
     public File getVideoFile() {
-        return new File(mainActivity.getFilesDir(), "video.mp4");
+        return new File(requireContext().getFilesDir(), "video.mp4");
     }
 
     public File getStabilizedVideoFile() {
-        return new File(mainActivity.getFilesDir(), "video-stabilized.mp4");
+        return new File(requireContext().getFilesDir(), "video-stabilized.mp4");
     }
 
     public void setActive() {
-        android.util.Log.i(MainActivity.TAG, "VidStab Tab Activated");
+        Log.i(MainActivity.TAG, "VidStab Tab Activated");
         enableLogCallback();
-        Popup.show(mainActivity, Tooltip.VIDSTAB_TEST_TOOLTIP_TEXT);
+        Popup.show(requireContext(), Tooltip.VIDSTAB_TEST_TOOLTIP_TEXT);
     }
 
     protected void showCreateProgressDialog() {

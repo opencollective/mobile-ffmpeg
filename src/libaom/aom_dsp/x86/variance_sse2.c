@@ -551,30 +551,23 @@ void aom_upsampled_pred_sse2(MACROBLOCKD *xd, const struct AV1Common *const cm,
           pre_buf->buf0 + (pos_y >> SCALE_SUBPEL_BITS) * pre_buf->stride +
           (pos_x >> SCALE_SUBPEL_BITS);
 
+      InterPredParams inter_pred_params;
       const SubpelParams subpel_params = { sf->x_step_q4, sf->y_step_q4,
                                            pos_x & SCALE_SUBPEL_MASK,
                                            pos_y & SCALE_SUBPEL_MASK };
 
-      // Get warp types.
-      const WarpedMotionParams *const wm =
-          &xd->global_motion[mi->ref_frame[ref_num]];
-      const int is_global = is_global_mv_block(mi, wm->wmtype);
-      WarpTypesAllowed warp_types;
-      warp_types.global_warp_allowed = is_global;
-      warp_types.local_warp_allowed = mi->motion_mode == WARPED_CAUSAL;
-
       // Get convolve parameters.
-      ConvolveParams conv_params = get_conv_params(0, plane, xd->bd);
+      inter_pred_params.conv_params = get_conv_params(0, plane, xd->bd);
       const int_interpfilters filters =
           av1_broadcast_interp_filter(EIGHTTAP_REGULAR);
+      av1_init_inter_params(
+          &inter_pred_params, width, height, mi_y >> pd->subsampling_y,
+          mi_x >> pd->subsampling_x, pd->subsampling_x, pd->subsampling_y,
+          xd->bd, is_cur_buf_hbd(xd), mi->use_intrabc, sf, pre_buf, filters);
 
       // Get the inter predictor.
-      const int build_for_obmc = 0;
       av1_make_inter_predictor(pre, pre_buf->stride, comp_pred, width,
-                               &subpel_params, sf, width, height, &conv_params,
-                               filters, &warp_types, mi_x >> pd->subsampling_x,
-                               mi_y >> pd->subsampling_y, plane, ref_num, mi,
-                               build_for_obmc, xd, cm->allow_warped_motion);
+                               &inter_pred_params, &subpel_params);
 
       return;
     }

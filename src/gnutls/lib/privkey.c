@@ -43,7 +43,7 @@ privkey_sign_prehashed(gnutls_privkey_t signer,
 		       const gnutls_sign_entry_st *se,
 		       const gnutls_datum_t * hash_data,
 		       gnutls_datum_t * signature,
-		       gnutls_x509_spki_st * params, unsigned flags);
+		       gnutls_x509_spki_st * params);
 
 /**
  * gnutls_privkey_get_type:
@@ -205,6 +205,7 @@ privkey_to_pubkey(gnutls_pk_algorithm_t pk,
 
 		break;
 	case GNUTLS_PK_EDDSA_ED25519:
+	case GNUTLS_PK_EDDSA_ED448:
 		ret = _gnutls_set_datum(&pub->raw_pub, priv->raw_pub.data, priv->raw_pub.size);
 		if (ret < 0)
 			return gnutls_assert_val(ret);
@@ -1134,6 +1135,8 @@ gnutls_privkey_sign_data(gnutls_privkey_t signer,
 		return ret;
 	}
 
+	FIX_SIGN_PARAMS(params, flags, hash);
+
 	return privkey_sign_and_hash_data(signer, _gnutls_pk_to_sign_entry(params.pk, hash), data, signature, &params);
 }
 
@@ -1186,6 +1189,8 @@ gnutls_privkey_sign_data2(gnutls_privkey_t signer,
 		return ret;
 	}
 
+	FIX_SIGN_PARAMS(params, flags, se->hash);
+
 	return privkey_sign_and_hash_data(signer, se, data, signature, &params);
 }
 
@@ -1197,20 +1202,17 @@ gnutls_privkey_sign_data2(gnutls_privkey_t signer,
  * @hash_data: holds the data to be signed
  * @signature: will contain newly allocated signature
  *
- * This function will sign the given hashed data using a signature algorithm
- * supported by the private key. Signature algorithms are always used
- * together with a hash functions.  Different hash functions may be
- * used for the RSA algorithm, but only SHA-XXX for the DSA keys.
+ * This function will sign the given hashed data using the specified signature
+ * algorithm. This function is an enhancement of gnutls_privkey_sign_hash(),
+ * as it allows utilizing a alternative signature algorithm where possible
+ * (e.g, use an RSA key with RSA-PSS).
  *
- * You may use gnutls_pubkey_get_preferred_hash_algorithm() to determine
- * the hash algorithm.
+ * The flags may be %GNUTLS_PRIVKEY_SIGN_FLAG_TLS1_RSA.
+ * In that case this function will ignore @hash_algo and perform a raw PKCS1 signature.
+ * Note that this flag is supported since 3.6.9.
  *
- * The flags may be %GNUTLS_PRIVKEY_SIGN_FLAG_TLS1_RSA or %GNUTLS_PRIVKEY_SIGN_FLAG_RSA_PSS.
- * In the former case this function will ignore @hash_algo and perform a raw PKCS1 signature,
- * and in the latter an RSA-PSS signature will be generated.
- *
- * Note that, not all algorithm support signing already hashed data. When
- * signing with Ed25519, gnutls_privkey_sign_data() should be used.
+ * Note also that, not all algorithm support signing already hashed data. When
+ * signing with Ed25519, gnutls_privkey_sign_data2() should be used instead.
  *
  * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned, otherwise a
  *   negative error value.
@@ -1228,9 +1230,16 @@ gnutls_privkey_sign_hash2(gnutls_privkey_t signer,
 	gnutls_x509_spki_st params;
 	const gnutls_sign_entry_st *se;
 
-	se = _gnutls_sign_to_entry(algo);
-	if (unlikely(se == NULL))
-		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+	if (flags & GNUTLS_PRIVKEY_SIGN_FLAG_TLS1_RSA) {
+		/* the corresponding signature algorithm is SIGN_RSA_RAW,
+		 * irrespective of hash algorithm. */
+		se = _gnutls_sign_to_entry(GNUTLS_SIGN_RSA_RAW);
+	} else {
+		se = _gnutls_sign_to_entry(algo);
+		if (unlikely(se == NULL))
+			return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+
+	}
 
 	ret = _gnutls_privkey_get_spki_params(signer, &params);
 	if (ret < 0) {
@@ -1245,7 +1254,9 @@ gnutls_privkey_sign_hash2(gnutls_privkey_t signer,
 		return ret;
 	}
 
-	return privkey_sign_prehashed(signer, se, hash_data, signature, &params, flags);
+	FIX_SIGN_PARAMS(params, flags, se->hash);
+
+	return privkey_sign_prehashed(signer, se, hash_data, signature, &params);
 }
 
 int
@@ -1368,8 +1379,10 @@ gnutls_privkey_sign_hash(gnutls_privkey_t signer,
 	if (unlikely(se == NULL))
 		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
 
+	FIX_SIGN_PARAMS(params, flags, hash_algo);
+
 	return privkey_sign_prehashed(signer, se,
-				      hash_data, signature, &params, flags);
+				      hash_data, signature, &params);
 }
 
 static int
@@ -1377,8 +1390,7 @@ privkey_sign_prehashed(gnutls_privkey_t signer,
 		       const gnutls_sign_entry_st *se,
 		       const gnutls_datum_t * hash_data,
 		       gnutls_datum_t * signature,
-		       gnutls_x509_spki_st * params,
-		       unsigned flags)
+		       gnutls_x509_spki_st * params)
 {
 	int ret;
 	gnutls_datum_t digest;
@@ -1484,8 +1496,6 @@ privkey_sign_raw_data(gnutls_privkey_t key,
 							   0,
 							   data, signature);
 		} else if (key->key.ext.sign_hash_func) {
-			unsigned int flags = 0;
-
 			if (se->pk == GNUTLS_PK_RSA) {
 				se = _gnutls_sign_to_entry(GNUTLS_SIGN_RSA_RAW);
 				assert(se != NULL);
@@ -1494,7 +1504,7 @@ privkey_sign_raw_data(gnutls_privkey_t key,
 			/* se may not be set here if we are doing legacy RSA */
 			return key->key.ext.sign_hash_func(key, se->id,
 							   key->key.ext.userdata,
-							   flags,
+							   0,
 							   data, signature);
 		} else {
 			if (!PK_IS_OK_FOR_EXT2(se->pk))

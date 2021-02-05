@@ -38,6 +38,9 @@
 #include <gnutls/gnutls.h>
 #include "profiles.h"
 #include "c-strcase.h"
+#include "inih/ini.h"
+#include "profiles.h"
+#include "name_val_array.h"
 
 #define MAX_ELEMENTS 64
 
@@ -129,7 +132,21 @@ static const int _supported_groups_ecdh[] = {
 	GNUTLS_GROUP_SECP256R1,
 	GNUTLS_GROUP_SECP384R1,
 	GNUTLS_GROUP_SECP521R1,
-	GNUTLS_GROUP_X25519, /* draft-ietf-tls-rfc4492bis */
+	GNUTLS_GROUP_X25519, /* RFC 8422 */
+	GNUTLS_GROUP_X448, /* RFC 8422 */
+	0
+};
+
+static const int _supported_groups_gost[] = {
+#ifdef ENABLE_GOST
+	GNUTLS_GROUP_GC256A,
+	GNUTLS_GROUP_GC256B,
+	GNUTLS_GROUP_GC256C,
+	GNUTLS_GROUP_GC256D,
+	GNUTLS_GROUP_GC512A,
+	GNUTLS_GROUP_GC512B,
+	GNUTLS_GROUP_GC512C,
+#endif
 	0
 };
 
@@ -137,7 +154,8 @@ static const int _supported_groups_normal[] = {
 	GNUTLS_GROUP_SECP256R1,
 	GNUTLS_GROUP_SECP384R1,
 	GNUTLS_GROUP_SECP521R1,
-	GNUTLS_GROUP_X25519, /* draft-ietf-tls-rfc4492bis */
+	GNUTLS_GROUP_X25519, /* RFC 8422 */
+	GNUTLS_GROUP_X448, /* RFC 8422 */
 
 	/* These should stay last as our default behavior
 	 * is to send key shares for two top types (GNUTLS_KEY_SHARE_TOP2)
@@ -156,7 +174,8 @@ static const int _supported_groups_secure128[] = {
 	GNUTLS_GROUP_SECP256R1,
 	GNUTLS_GROUP_SECP384R1,
 	GNUTLS_GROUP_SECP521R1,
-	GNUTLS_GROUP_X25519, /* draft-ietf-tls-rfc4492bis */
+	GNUTLS_GROUP_X25519, /* RFC 8422 */
+	GNUTLS_GROUP_X448, /* RFC 8422 */
 	GNUTLS_GROUP_FFDHE2048,
 	GNUTLS_GROUP_FFDHE3072,
 	GNUTLS_GROUP_FFDHE4096,
@@ -281,6 +300,12 @@ static const int _kx_priority_secure[] = {
 };
 static const int* kx_priority_secure = _kx_priority_secure;
 
+static const int _kx_priority_gost[] = {
+	GNUTLS_KX_VKO_GOST_12,
+	0,
+};
+static const int* kx_priority_gost = _kx_priority_gost;
+
 static const int _cipher_priority_performance_default[] = {
 	GNUTLS_CIPHER_AES_128_GCM,
 	GNUTLS_CIPHER_AES_256_GCM,
@@ -397,6 +422,8 @@ static const int _sign_priority_default[] = {
 	GNUTLS_SIGN_ECDSA_SHA384,
 	GNUTLS_SIGN_ECDSA_SECP384R1_SHA384,
 
+	GNUTLS_SIGN_EDDSA_ED448,
+
 	GNUTLS_SIGN_RSA_SHA512,
 	GNUTLS_SIGN_RSA_PSS_SHA512,
 	GNUTLS_SIGN_RSA_PSS_RSAE_SHA512,
@@ -433,6 +460,7 @@ static const int _sign_priority_secure128[] = {
 	GNUTLS_SIGN_RSA_PSS_RSAE_SHA256,
 	GNUTLS_SIGN_ECDSA_SHA256,
 	GNUTLS_SIGN_ECDSA_SECP256R1_SHA256,
+
 	GNUTLS_SIGN_EDDSA_ED25519,
 
 	GNUTLS_SIGN_RSA_SHA384,
@@ -440,6 +468,8 @@ static const int _sign_priority_secure128[] = {
 	GNUTLS_SIGN_RSA_PSS_RSAE_SHA384,
 	GNUTLS_SIGN_ECDSA_SHA384,
 	GNUTLS_SIGN_ECDSA_SECP384R1_SHA384,
+
+	GNUTLS_SIGN_EDDSA_ED448,
 
 	GNUTLS_SIGN_RSA_SHA512,
 	GNUTLS_SIGN_RSA_PSS_SHA512,
@@ -467,6 +497,14 @@ static const int _sign_priority_secure192[] = {
 };
 static const int* sign_priority_secure192 = _sign_priority_secure192;
 
+static const int _sign_priority_gost[] = {
+	GNUTLS_SIGN_GOST_256,
+	GNUTLS_SIGN_GOST_512,
+
+	0
+};
+static const int* sign_priority_gost = _sign_priority_gost;
+
 static const int mac_priority_normal_default[] = {
 	GNUTLS_MAC_SHA1,
 	GNUTLS_MAC_AEAD,
@@ -482,6 +520,18 @@ static const int mac_priority_normal_fips[] = {
 static const int *cipher_priority_performance = _cipher_priority_performance_default;
 static const int *cipher_priority_normal = _cipher_priority_normal_default;
 static const int *mac_priority_normal = mac_priority_normal_default;
+
+static const int _cipher_priority_gost[] = {
+	GNUTLS_CIPHER_GOST28147_TC26Z_CNT,
+	0
+};
+static const int *cipher_priority_gost = _cipher_priority_gost;
+
+static const int _mac_priority_gost[] = {
+	GNUTLS_MAC_GOST28147_TC26Z_IMIT,
+	0
+};
+static const int *mac_priority_gost = _mac_priority_gost;
 
 /* if called with replace the default priorities with the FIPS140 ones */
 void _gnutls_priority_update_fips(void)
@@ -944,91 +994,347 @@ static void dummy_func(gnutls_priority_t c)
 
 #include <priority_options.h>
 
-static char *check_str(char *line, size_t line_size, const char *needle, size_t needle_size)
-{
-	char *p;
-	unsigned n;
-
-	while (c_isspace(*line)) {
-		line++;
-		line_size--;
-	}
-
-	if (line[0] == '#' || needle_size >= line_size)
-		return NULL;
-
-	if (memcmp(line, needle, needle_size) == 0) {
-		p = &line[needle_size];
-		while (c_isspace(*p)) {
-			p++;
-		}
-		if (*p != '=') {
-			return NULL;
-		} else
-			p++;
-
-		while (c_isspace(*p)) {
-			p++;
-		}
-
-		n = strlen(p);
-
-		if (n > 1 && p[n-1] == '\n') {
-			n--;
-			p[n] = 0;
-		}
-
-		if (n > 1 && p[n-1] == '\r') {
-			n--;
-			p[n] = 0;
-		}
-		return p;
-	}
-
-	return NULL;
-}
+static gnutls_certificate_verification_profiles_t system_wide_verification_profile = GNUTLS_PROFILE_UNKNOWN;
+static name_val_array_t system_wide_priority_strings = NULL;
+static unsigned system_wide_priority_strings_init = 0;
+static unsigned system_wide_default_priority_string = 0;
+static unsigned fail_on_invalid_config = 0;
+static unsigned system_wide_disabled_ciphers[MAX_ALGOS+1] = {0};
+static unsigned system_wide_disabled_macs[MAX_ALGOS+1] = {0};
+static unsigned system_wide_disabled_groups[MAX_ALGOS+1] = {0};
+static unsigned system_wide_disabled_kxs[MAX_ALGOS+1] = {0};
 
 static const char *system_priority_file = SYSTEM_PRIORITY_FILE;
-static char *system_priority_buf = NULL;
-static size_t system_priority_buf_size = 0;
 static time_t system_priority_last_mod = 0;
 
+#define CUSTOM_PRIORITY_SECTION "priorities"
+#define OVERRIDES_SECTION "overrides"
+#define MAX_ALGO_NAME 2048
+
+static void _clear_default_system_priority(void)
+{
+        if (system_wide_default_priority_string) {
+                gnutls_free(_gnutls_default_priority_string);
+                _gnutls_default_priority_string = DEFAULT_PRIORITY_STRING;
+                system_wide_default_priority_string = 0;
+        }
+
+}
+
+gnutls_certificate_verification_profiles_t _gnutls_get_system_wide_verification_profile(void)
+{
+	return system_wide_verification_profile;
+}
+
+/* removes spaces */
+static char *clear_spaces(const char *str, char out[MAX_ALGO_NAME])
+{
+	const char *p = str;
+	unsigned i = 0;
+
+	while (c_isspace(*p))
+		p++;
+
+	while (!c_isspace(*p) && *p != 0) {
+		out[i++] = *p;
+		p++;
+
+		if (i >= MAX_ALGO_NAME-1)
+			break;
+	}
+	out[i] = 0;
+	return out;
+}
+
+/* This function parses a gnutls configuration file and updates internal
+ * settings accordingly.
+ */
+static int cfg_ini_handler(void *_ctx, const char *section, const char *name, const char *value)
+{
+	char *p;
+	int ret, type;
+	unsigned i;
+	char str[MAX_ALGO_NAME];
+
+	/* Note that we intentionally overwrite the value above; inih does
+	 * not use that value after we handle it. */
+
+	/* Parse sections */
+	if (section == NULL || section[0] == 0 || c_strcasecmp(section, CUSTOM_PRIORITY_SECTION)==0) {
+		if (system_wide_priority_strings_init == 0) {
+			_name_val_array_init(&system_wide_priority_strings);
+			system_wide_priority_strings_init = 1;
+		}
+
+		_gnutls_debug_log("cfg: adding priority: %s -> %s\n", name, value);
+
+		ret = _name_val_array_append(&system_wide_priority_strings, name, value);
+		if (ret < 0)
+			return 0;
+	} else if (c_strcasecmp(section, OVERRIDES_SECTION)==0) {
+		if (c_strcasecmp(name, "default-priority-string")==0) {
+			_clear_default_system_priority();
+			p = clear_spaces(value, str);
+			_gnutls_debug_log("cfg: setting default-priority-string to %s\n", p);
+			if (strlen(p) > 0) {
+				_gnutls_default_priority_string = gnutls_strdup(p);
+				if (!_gnutls_default_priority_string) {
+					_gnutls_default_priority_string = DEFAULT_PRIORITY_STRING;
+					_gnutls_debug_log("cfg: failed setting default-priority-string\n");
+					return 0;
+				}
+				system_wide_default_priority_string = 1;
+			} else {
+				_gnutls_debug_log("cfg: empty default-priority-string, using default\n");
+				if (fail_on_invalid_config)
+					return 0;
+			}
+		} else if (c_strcasecmp(name, "insecure-hash")==0) {
+			p = clear_spaces(value, str);
+
+			_gnutls_debug_log("cfg: marking hash %s as insecure\n",
+					  p);
+
+			ret = _gnutls_digest_mark_insecure(p);
+			if (ret < 0) {
+				_gnutls_debug_log("cfg: found unknown hash %s in %s\n",
+						  p, name);
+				if (fail_on_invalid_config)
+					return 0;
+			}
+		} else if (c_strcasecmp(name, "insecure-sig")==0 || c_strcasecmp(name, "insecure-sig-for-cert")==0) {
+			p = clear_spaces(value, str);
+
+			if (c_strcasecmp(name, "insecure-sig")==0) {
+				type = _INSECURE;
+				_gnutls_debug_log("cfg: marking signature %s as insecure\n",
+						  p);
+			} else {
+				_gnutls_debug_log("cfg: marking signature %s as insecure for certs\n",
+						  p);
+				type = _INSECURE_FOR_CERTS;
+			}
+
+			ret = _gnutls_sign_mark_insecure(p, type);
+			if (ret < 0) {
+				_gnutls_debug_log("cfg: found unknown signature algorithm %s in %s\n",
+						  p, name);
+				if (fail_on_invalid_config)
+					return 0;
+			}
+		} else if (c_strcasecmp(name, "disabled-version")==0) {
+			p = clear_spaces(value, str);
+
+			_gnutls_debug_log("cfg: disabling version %s\n",
+					  p);
+
+			ret = _gnutls_version_mark_disabled(p);
+			if (ret < 0) {
+				_gnutls_debug_log("cfg: found unknown version %s in %s\n",
+						  p, name);
+				if (fail_on_invalid_config)
+					return 0;
+			}
+		} else if (c_strcasecmp(name, "disabled-curve")==0) {
+			p = clear_spaces(value, str);
+
+			_gnutls_debug_log("cfg: disabling curve %s\n",
+					  p);
+
+			ret = _gnutls_ecc_curve_mark_disabled(p);
+			if (ret < 0) {
+				_gnutls_debug_log("cfg: found unknown curve %s in %s\n",
+						  p, name);
+				if (fail_on_invalid_config)
+					return 0;
+			}
+		} else if (c_strcasecmp(name, "min-verification-profile")==0) {
+			gnutls_certificate_verification_profiles_t profile;
+			profile = gnutls_certificate_verification_profile_get_id(value);
+
+			if (profile == GNUTLS_PROFILE_UNKNOWN) {
+				_gnutls_debug_log("cfg: found unknown profile %s in %s\n",
+						  value, name);
+				if (fail_on_invalid_config)
+					return 0;
+			}
+
+			system_wide_verification_profile = profile;
+		} else if (c_strcasecmp(name, "tls-disabled-cipher")==0) {
+			unsigned algo;
+
+			p = clear_spaces(value, str);
+
+			_gnutls_debug_log("cfg: disabling cipher %s for TLS\n",
+					  p);
+
+
+			algo = gnutls_cipher_get_id(p);
+			if (algo == 0) {
+				_gnutls_debug_log("cfg: unknown algorithm %s listed at %s\n",
+						  p, name);
+				if (fail_on_invalid_config)
+					return 0;
+			}
+
+			i = 0;
+			while (system_wide_disabled_ciphers[i] != 0)
+				i++;
+
+			if (i > MAX_ALGOS-1) {
+				_gnutls_debug_log("cfg: too many (%d) disabled ciphers from %s\n",
+						  i, name);
+				if (fail_on_invalid_config)
+					return 0;
+				goto exit;
+			}
+			system_wide_disabled_ciphers[i] = algo;
+			system_wide_disabled_ciphers[i+1] = 0;
+
+		} else if (c_strcasecmp(name, "tls-disabled-mac")==0) {
+			unsigned algo;
+
+			p = clear_spaces(value, str);
+
+			_gnutls_debug_log("cfg: disabling MAC %s for TLS\n",
+					  p);
+
+			algo = gnutls_mac_get_id(p);
+			if (algo == 0) {
+				_gnutls_debug_log("cfg: unknown algorithm %s listed at %s\n",
+						  p, name);
+				if (fail_on_invalid_config)
+					return 0;
+				goto exit;
+			}
+
+			i = 0;
+			while (system_wide_disabled_macs[i] != 0)
+				i++;
+
+			if (i > MAX_ALGOS-1) {
+				_gnutls_debug_log("cfg: too many (%d) disabled MACs from %s\n",
+						  i, name);
+				if (fail_on_invalid_config)
+					return 0;
+				goto exit;
+			}
+			system_wide_disabled_macs[i] = algo;
+			system_wide_disabled_macs[i+1] = 0;
+		} else if (c_strcasecmp(name, "tls-disabled-group")==0) {
+			unsigned algo;
+
+			p = clear_spaces(value, str);
+
+			if (strlen(p) > 6)
+				p += 6; // skip GROUP-
+
+			_gnutls_debug_log("cfg: disabling group %s for TLS\n",
+					  p);
+
+			algo = gnutls_group_get_id(p);
+			if (algo == 0) {
+				_gnutls_debug_log("cfg: unknown group %s listed at %s\n",
+						  p, name);
+				if (fail_on_invalid_config)
+					return 0;
+				goto exit;
+			}
+
+			i = 0;
+			while (system_wide_disabled_groups[i] != 0)
+				i++;
+
+			if (i > MAX_ALGOS-1) {
+				_gnutls_debug_log("cfg: too many (%d) disabled groups from %s\n",
+						  i, name);
+				if (fail_on_invalid_config)
+					return 0;
+				goto exit;
+			}
+			system_wide_disabled_groups[i] = algo;
+			system_wide_disabled_groups[i+1] = 0;
+		} else if (c_strcasecmp(name, "tls-disabled-kx")==0) {
+			unsigned algo;
+
+			p = clear_spaces(value, str);
+
+			_gnutls_debug_log("cfg: disabling key exchange %s for TLS\n",
+					  p);
+
+			algo = gnutls_kx_get_id(p);
+			if (algo == 0) {
+				_gnutls_debug_log("cfg: unknown key exchange %s listed at %s\n",
+						  p, name);
+				if (fail_on_invalid_config)
+					return 0;
+				goto exit;
+			}
+
+			i = 0;
+			while (system_wide_disabled_kxs[i] != 0)
+				i++;
+
+			if (i > MAX_ALGOS-1) {
+				_gnutls_debug_log("cfg: too many (%d) disabled key exchanges from %s\n",
+						  i, name);
+				if (fail_on_invalid_config)
+					return 0;
+				goto exit;
+			}
+			system_wide_disabled_kxs[i] = algo;
+			system_wide_disabled_kxs[i+1] = 0;
+		} else {
+			_gnutls_debug_log("unknown parameter %s\n", name);
+			if (fail_on_invalid_config)
+				return 0;
+		}
+	} else {
+		_gnutls_debug_log("cfg: unknown section %s\n",
+				  section);
+		if (fail_on_invalid_config)
+			return 0;
+	}
+
+ exit:
+	return 1;
+}
 
 static void _gnutls_update_system_priorities(void)
 {
-#ifdef HAVE_FMEMOPEN
-	gnutls_datum_t data;
 	int ret;
 	struct stat sb;
 
 	if (stat(system_priority_file, &sb) < 0) {
-		_gnutls_debug_log("unable to access: %s: %d\n",
+		_gnutls_debug_log("cfg: unable to access: %s: %d\n",
 				  system_priority_file, errno);
 		return;
 	}
 
-	if (system_priority_buf != NULL &&
+	if (system_wide_priority_strings_init != 0 &&
 	    sb.st_mtime == system_priority_last_mod) {
-		_gnutls_debug_log("system priority %s has not changed\n",
+		_gnutls_debug_log("cfg: system priority %s has not changed\n",
 				  system_priority_file);
 		return;
 	}
 
-	ret = gnutls_load_file(system_priority_file, &data);
-	if (ret < 0) {
-		_gnutls_debug_log("unable to load: %s: %d\n",
+	if (system_wide_priority_strings_init != 0)
+		_name_val_array_clear(&system_wide_priority_strings);
+
+	ret = ini_parse(system_priority_file, cfg_ini_handler, NULL);
+	if (ret != 0) {
+		_gnutls_debug_log("cfg: unable to parse: %s: %d\n",
 				  system_priority_file, ret);
+		if (fail_on_invalid_config)
+			exit(1);
 		return;
 	}
 
-	_gnutls_debug_log("cached system priority %s mtime %lld\n",
+	_gnutls_debug_log("cfg: loaded system priority %s mtime %lld\n",
 			  system_priority_file,
 			  (unsigned long long)sb.st_mtime);
-	gnutls_free(system_priority_buf);
-	system_priority_buf = (char*)data.data;
-	system_priority_buf_size = data.size;
+
 	system_priority_last_mod = sb.st_mtime;
-#endif
 }
 
 void _gnutls_load_system_priorities(void)
@@ -1039,17 +1345,37 @@ void _gnutls_load_system_priorities(void)
 	if (p != NULL)
 		system_priority_file = p;
 
+	p = secure_getenv("GNUTLS_SYSTEM_PRIORITY_FAIL_ON_INVALID");
+	if (p != NULL && p[0] == '1' && p[1] == 0)
+		fail_on_invalid_config = 1;
+
 	_gnutls_update_system_priorities();
 }
 
 void _gnutls_unload_system_priorities(void)
 {
-#ifdef HAVE_FMEMOPEN
-	gnutls_free(system_priority_buf);
-#endif
-	system_priority_buf = NULL;
-	system_priority_buf_size = 0;
+	_name_val_array_clear(&system_wide_priority_strings);
+	_clear_default_system_priority();
 	system_priority_last_mod = 0;
+}
+
+/**
+ * gnutls_get_system_config_file:
+ *
+ * Returns the filename of the system wide configuration
+ * file loaded by the library. The returned pointer is valid
+ * until the library is unloaded.
+ *
+ * Returns: a constant pointer to the config file loaded, or %NULL if none
+ *
+ * Since: 3.6.9
+ **/
+const char *gnutls_get_system_config_file(void)
+{
+	if (system_wide_priority_strings_init)
+		return system_priority_file;
+	else
+		return NULL;
 }
 
 #define S(str) ((str!=NULL)?str:"")
@@ -1063,14 +1389,12 @@ void _gnutls_unload_system_priorities(void)
  */
 char *_gnutls_resolve_priorities(const char* priorities)
 {
-char *p = (char*)priorities;
-char *additional = NULL;
-char *ret = NULL;
-char *ss, *ss_next, *line = NULL;
-unsigned ss_len, ss_next_len;
-int l;
-FILE* fp = NULL;
-size_t n, n2 = 0, line_size;
+	const char *p = priorities;
+	char *additional = NULL;
+	char *ret = NULL;
+	const char *ss, *ss_next;
+	unsigned ss_len, ss_next_len;
+	size_t n, n2 = 0;
 
 	while (c_isspace(*p))
 		p++;
@@ -1102,35 +1426,17 @@ size_t n, n2 = 0, line_size;
 				ss_next_len = 0;
 			}
 
-#ifdef HAVE_FMEMOPEN
 			/* Always try to refresh the cached data, to
 			 * allow it to be updated without restarting
 			 * all applications
 			 */
 			_gnutls_update_system_priorities();
-			fp = fmemopen(system_priority_buf, system_priority_buf_size, "r");
-#else
-			fp = fopen(system_priority_file, "r");
-#endif
-			if (fp == NULL) {/* fail */
-				ret = NULL;
-				goto finish;
-			}
 
-			do {
-				l = getline(&line, &line_size, fp);
-				if (l > 0) {
-					p = check_str(line, line_size, ss, ss_len);
-					if (p != NULL)
-						break;
-				}
-			} while (l>0);
+			p = _name_val_array_value(system_wide_priority_strings, ss, ss_len);
 
 			_gnutls_debug_log("resolved '%.*s' to '%s', next '%.*s'\n",
 					  ss_len, ss, S(p), ss_next_len, S(ss_next));
 			ss = ss_next;
-			fclose(fp);
-			fp = NULL;
 		} while (ss && p == NULL);
 
 		if (p == NULL) {
@@ -1164,9 +1470,6 @@ finish:
 	if (ret != NULL) {
 		_gnutls_debug_log("selected priority string: %s\n", ret);
 	}
-	free(line);
-	if (fp != NULL)
-		fclose(fp);
 
 	return ret;
 }
@@ -1204,6 +1507,10 @@ static void add_dh(gnutls_priority_t priority_cache)
 	}
 }
 
+/* This function was originally precalculating ciphersuite-specific items, however
+ * it has now extended to much more than that. It provides a consistency check to
+ * set parameters, and in cases it applies policy specific items.
+ */
 static int set_ciphersuite_list(gnutls_priority_t priority_cache)
 {
 	unsigned i, j, z;
@@ -1228,6 +1535,50 @@ static int set_ciphersuite_list(gnutls_priority_t priority_cache)
 	priority_cache->groups.size = 0;
 	priority_cache->groups.have_ffdhe = 0;
 
+	/* disable key exchanges which are globally disabled */
+	z = 0;
+	while (system_wide_disabled_kxs[z] != 0) {
+		for (i = j = 0; i < priority_cache->_kx.num_priorities; i++) {
+			if (priority_cache->_kx.priorities[i] != system_wide_disabled_kxs[z])
+				priority_cache->_kx.priorities[j++] = priority_cache->_kx.priorities[i];
+		}
+		priority_cache->_kx.num_priorities = j;
+		z++;
+	}
+
+	/* disable groups which are globally disabled */
+	z = 0;
+	while (system_wide_disabled_groups[z] != 0) {
+		for (i = j = 0; i < priority_cache->_supported_ecc.num_priorities; i++) {
+			if (priority_cache->_supported_ecc.priorities[i] != system_wide_disabled_groups[z])
+				priority_cache->_supported_ecc.priorities[j++] = priority_cache->_supported_ecc.priorities[i];
+		}
+		priority_cache->_supported_ecc.num_priorities = j;
+		z++;
+	}
+
+	/* disable ciphers which are globally disabled */
+	z = 0;
+	while (system_wide_disabled_ciphers[z] != 0) {
+		for (i = j = 0; i < priority_cache->_cipher.num_priorities; i++) {
+			if (priority_cache->_cipher.priorities[i] != system_wide_disabled_ciphers[z])
+				priority_cache->_cipher.priorities[j++] = priority_cache->_cipher.priorities[i];
+		}
+		priority_cache->_cipher.num_priorities = j;
+		z++;
+	}
+
+	/* disable MACs which are globally disabled */
+	z = 0;
+	while (system_wide_disabled_macs[z] != 0) {
+		for (i = j = 0; i < priority_cache->_mac.num_priorities; i++) {
+			if (priority_cache->_mac.priorities[i] != system_wide_disabled_macs[z])
+				priority_cache->_mac.priorities[j++] = priority_cache->_mac.priorities[i];
+		}
+		priority_cache->_mac.num_priorities = j;
+		z++;
+	}
+
 	for (j=0;j<priority_cache->_cipher.num_priorities;j++) {
 		if (priority_cache->_cipher.priorities[j] == GNUTLS_CIPHER_NULL) {
 			have_null = 1;
@@ -1245,6 +1596,15 @@ static int set_ciphersuite_list(gnutls_priority_t priority_cache)
 				have_psk = 1;
 		}
 	}
+
+	/* disable TLS versions which are added but are unsupported */
+	for (i = j = 0; i < priority_cache->protocol.num_priorities; i++) {
+		vers = version_to_entry(priority_cache->protocol.priorities[i]);
+		if (!vers || vers->supported)
+			priority_cache->protocol.priorities[j++] = priority_cache->protocol.priorities[i];
+	}
+	priority_cache->protocol.num_priorities = j;
+
 
 	/* if we have NULL ciphersuites, SRP, or RSA-PSK enabled remove TLS1.3+
 	 * protocol versions; they cannot be negotiated under TLS1.3. */
@@ -1326,7 +1686,8 @@ static int set_ciphersuite_list(gnutls_priority_t priority_cache)
 
 				if (ce != NULL && priority_cache->cs.size < MAX_CIPHERSUITE_SIZE) {
 					priority_cache->cs.entry[priority_cache->cs.size++] = ce;
-					if (!have_ec && _gnutls_kx_is_ecc(ce->kx_algorithm)) {
+					if (!have_ec && (_gnutls_kx_is_ecc(ce->kx_algorithm) ||
+							 _gnutls_kx_is_vko_gost(ce->kx_algorithm))) {
 						have_ec = 1;
 						add_ec(priority_cache);
 					}
@@ -1417,6 +1778,16 @@ static int set_ciphersuite_list(gnutls_priority_t priority_cache)
 		priority_cache->protocol.num_priorities = j;
 	}
 
+	/* ensure that the verification profile is not lower from the configured */
+	if (system_wide_verification_profile) {
+		gnutls_sec_param_t level = priority_cache->level;
+		gnutls_sec_param_t system_wide_level = _gnutls_profile_to_sec_level(system_wide_verification_profile);
+
+		if (level < system_wide_level) {
+			ENABLE_PROFILE(priority_cache, system_wide_verification_profile);
+		}
+	}
+
 	return 0;
 }
 
@@ -1474,7 +1845,7 @@ static int set_ciphersuite_list(gnutls_priority_t priority_cache)
  *
  * "@@KEYWORD1,KEYWORD2,..." The system administrator imposed settings.
  * The provided keyword(s) will be expanded from a configuration-time
- * provided file - default is: /etc/gnutls/default-priorities.
+ * provided file - default is: /etc/gnutls/config.
  * Any attributes that follow it, will be appended to the expanded
  * string. If multiple keywords are provided, separated by commas,
  * then the first keyword that exists in the configuration file
@@ -1572,6 +1943,8 @@ gnutls_priority_init2(gnutls_priority_t * priority_cache,
 		return gnutls_priority_init(priority_cache, priorities, err_pos);
 	}
 }
+
+#define PRIO_MATCH(name) c_strncasecmp(&broken_list[i][1], name, sizeof(name) - 1)
 
 /**
  * gnutls_priority_init:
@@ -1696,23 +2069,16 @@ gnutls_priority_init(gnutls_priority_t * priority_cache,
 				 GNUTLS_KX_UNKNOWN) {
 				if (algo != GNUTLS_KX_INVALID)
 					fn(&(*priority_cache)->_kx, algo);
-			} else if (c_strncasecmp
-				 (&broken_list[i][1], "VERS-", 5) == 0) {
-				if (c_strncasecmp
-				    (&broken_list[i][1], "VERS-TLS-ALL",
-				     12) == 0) {
+			} else if (PRIO_MATCH("VERS-") == 0) {
+				if (PRIO_MATCH("VERS-TLS-ALL") == 0) {
 					bulk_given_fn(&(*priority_cache)->
 						protocol,
 						stream_protocol_priority);
-				} else if (c_strncasecmp
-					(&broken_list[i][1],
-					 "VERS-DTLS-ALL", 13) == 0) {
+				} else if (PRIO_MATCH("VERS-DTLS-ALL") == 0) {
 					bulk_given_fn(&(*priority_cache)->
 						protocol,
 						(bulk_given_fn==_add_priority)?dtls_protocol_priority:dgram_protocol_priority);
-				} else if (c_strncasecmp
-					(&broken_list[i][1],
-					 "VERS-ALL", 8) == 0) {
+				} else if (PRIO_MATCH("VERS-ALL") == 0) {
 					bulk_fn(&(*priority_cache)->
 						protocol,
 						protocol_priority);
@@ -1720,24 +2086,20 @@ gnutls_priority_init(gnutls_priority_t * priority_cache,
 					if ((algo =
 					     gnutls_protocol_get_id
 					     (&broken_list[i][6])) !=
-					    GNUTLS_VERSION_UNKNOWN)
+					    GNUTLS_VERSION_UNKNOWN) {
 						fn(&(*priority_cache)->
 						   protocol, algo);
-					else
+					} else
 						goto error;
 
 				}
 			} /* now check if the element is something like -ALGO */
-			else if (c_strncasecmp
-				 (&broken_list[i][1], "COMP-", 5) == 0) {
+			else if (PRIO_MATCH("COMP-") == 0) {
 				/* ignore all compression methods */
 				continue;
 			} /* now check if the element is something like -ALGO */
-			else if (c_strncasecmp
-				 (&broken_list[i][1], "CURVE-", 6) == 0) {
-				if (c_strncasecmp
-				    (&broken_list[i][1], "CURVE-ALL",
-				     9) == 0) {
+			else if (PRIO_MATCH("CURVE-") == 0) {
+				if (PRIO_MATCH("CURVE-ALL") == 0) {
 					bulk_fn(&(*priority_cache)->
 						_supported_ecc,
 						supported_groups_normal);
@@ -1751,26 +2113,23 @@ gnutls_priority_init(gnutls_priority_t * priority_cache,
 					else
 						goto error;
 				}
-			} else if (c_strncasecmp
-				 (&broken_list[i][1], "GROUP-", 6) == 0) {
-				if (c_strncasecmp
-				    (&broken_list[i][1], "GROUP-ALL",
-				     9) == 0) {
+			} else if (PRIO_MATCH("GROUP-") == 0) {
+				if (PRIO_MATCH("GROUP-ALL") == 0) {
 					bulk_fn(&(*priority_cache)->
 						_supported_ecc,
 						supported_groups_normal);
-				} else if (strncasecmp
-				    (&broken_list[i][1], "GROUP-DH-ALL",
-				     12) == 0) {
+				} else if (PRIO_MATCH("GROUP-DH-ALL") == 0) {
 					bulk_given_fn(&(*priority_cache)->
 						_supported_ecc,
 						_supported_groups_dh);
-				} else if (strncasecmp
-				    (&broken_list[i][1], "GROUP-EC-ALL",
-				     12) == 0) {
+				} else if (PRIO_MATCH("GROUP-EC-ALL") == 0) {
 					bulk_given_fn(&(*priority_cache)->
 						_supported_ecc,
 						_supported_groups_ecdh);
+				} else if (PRIO_MATCH("GROUP-GOST-ALL") == 0) {
+					bulk_given_fn(&(*priority_cache)->
+						_supported_ecc,
+						_supported_groups_gost);
 				} else {
 					if ((algo =
 					     gnutls_group_get_id
@@ -1781,17 +2140,17 @@ gnutls_priority_init(gnutls_priority_t * priority_cache,
 					else
 						goto error;
 				}
-			} else if (strncasecmp(&broken_list[i][1], "CTYPE-", 6) == 0) {
+			} else if (PRIO_MATCH("CTYPE-") == 0) {
 				// Certificate types
-				if (strncasecmp(&broken_list[i][1], "CTYPE-ALL", 9) == 0) {
+				if (PRIO_MATCH("CTYPE-ALL") == 0) {
 					// Symmetric cert types, all types allowed
 					bulk_fn(&(*priority_cache)->client_ctype,
 						cert_type_priority_all);
 					bulk_fn(&(*priority_cache)->server_ctype,
 						cert_type_priority_all);
-				} else if (strncasecmp(&broken_list[i][1], "CTYPE-CLI-", 10) == 0) {
+				} else if (PRIO_MATCH("CTYPE-CLI-") == 0) {
 					// Client certificate types
-					if (strncasecmp(&broken_list[i][1], "CTYPE-CLI-ALL", 13) == 0) {
+					if (PRIO_MATCH("CTYPE-CLI-ALL") == 0) {
 						// All client cert types allowed
 						bulk_fn(&(*priority_cache)->client_ctype,
 							cert_type_priority_all);
@@ -1800,9 +2159,9 @@ gnutls_priority_init(gnutls_priority_t * priority_cache,
 						// Specific client cert type allowed
 						fn(&(*priority_cache)->client_ctype, algo);
 					} else goto error;
-				} else if (strncasecmp(&broken_list[i][1], "CTYPE-SRV-", 10) == 0) {
+				} else if (PRIO_MATCH("CTYPE-SRV-") == 0) {
 					// Server certificate types
-					if (strncasecmp(&broken_list[i][1], "CTYPE-SRV-ALL", 13) == 0) {
+					if (PRIO_MATCH("CTYPE-SRV-ALL") == 0) {
 						// All server cert types allowed
 						bulk_fn(&(*priority_cache)->server_ctype,
 							cert_type_priority_all);
@@ -1816,19 +2175,20 @@ gnutls_priority_init(gnutls_priority_t * priority_cache,
 					     (&broken_list[i][7])) != GNUTLS_CRT_UNKNOWN) {
 						fn(&(*priority_cache)->client_ctype, algo);
 						fn(&(*priority_cache)->server_ctype, algo);
-					} else if (strncasecmp(&broken_list[i][1], "CTYPE-OPENPGP", 13) == 0) {
+					} else if (PRIO_MATCH("CTYPE-OPENPGP") == 0) {
 						/* legacy openpgp option - ignore */
 						continue;
 					} else goto error;
 				}
-			} else if (strncasecmp
-				 (&broken_list[i][1], "SIGN-", 5) == 0) {
-				if (strncasecmp
-				    (&broken_list[i][1], "SIGN-ALL",
-				     8) == 0) {
+			} else if (PRIO_MATCH("SIGN-") == 0) {
+				if (PRIO_MATCH("SIGN-ALL") == 0) {
 					bulk_fn(&(*priority_cache)->
 						_sign_algo,
 						sign_priority_default);
+				} else if (PRIO_MATCH("SIGN-GOST-ALL") == 0) {
+					bulk_fn(&(*priority_cache)->
+						_sign_algo,
+						sign_priority_gost);
 				} else {
 					if ((algo =
 					     gnutls_sign_get_id
@@ -1839,19 +2199,41 @@ gnutls_priority_init(gnutls_priority_t * priority_cache,
 					else
 						goto error;
 				}
-			} else if (c_strncasecmp
-				(&broken_list[i][1], "MAC-ALL", 7) == 0) {
+			} else if (PRIO_MATCH("MAC-") == 0) {
+				if (PRIO_MATCH("MAC-ALL") == 0) {
+					bulk_fn(&(*priority_cache)->_mac,
+							mac_priority_normal);
+				} else if (PRIO_MATCH("MAC-GOST-ALL") == 0) {
+					bulk_fn(&(*priority_cache)->_mac,
+							mac_priority_gost);
+				}
+			} else if (PRIO_MATCH("CIPHER-") == 0) {
+				if (PRIO_MATCH("CIPHER-ALL") == 0) {
+					bulk_fn(&(*priority_cache)->_cipher,
+							cipher_priority_normal);
+				} else if (PRIO_MATCH("CIPHER-GOST-ALL") == 0) {
+					bulk_fn(&(*priority_cache)->_cipher,
+							cipher_priority_gost);
+				}
+			} else if (PRIO_MATCH("KX-") == 0) {
+				if (PRIO_MATCH("KX-ALL") == 0) {
+					bulk_fn(&(*priority_cache)->_kx,
+							kx_priority_secure);
+				} else if (PRIO_MATCH("KX-GOST-ALL") == 0) {
+					bulk_fn(&(*priority_cache)->_kx,
+							kx_priority_gost);
+				}
+			} else if (PRIO_MATCH("GOST") == 0) {
+				bulk_given_fn(&(*priority_cache)->_supported_ecc,
+					_supported_groups_gost);
+				bulk_fn(&(*priority_cache)->_sign_algo,
+					sign_priority_gost);
 				bulk_fn(&(*priority_cache)->_mac,
-					mac_priority_normal);
-			} else if (c_strncasecmp
-				(&broken_list[i][1], "CIPHER-ALL",
-				 10) == 0) {
+						mac_priority_gost);
 				bulk_fn(&(*priority_cache)->_cipher,
-					cipher_priority_normal);
-			} else if (c_strncasecmp
-				(&broken_list[i][1], "KX-ALL", 6) == 0) {
+						cipher_priority_gost);
 				bulk_fn(&(*priority_cache)->_kx,
-					kx_priority_secure);
+						kx_priority_gost);
 			} else
 				goto error;
 		} else if (broken_list[i][0] == '%') {

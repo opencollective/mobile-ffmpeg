@@ -29,13 +29,16 @@
 
 void
 _gnutls_record_buffer_put(gnutls_session_t session,
-			  content_type_t type, gnutls_uint64 * seq,
+			  content_type_t type, uint64_t seq,
 			  mbuffer_st * bufel);
 
 inline static int _gnutls_record_buffer_get_size(gnutls_session_t session)
 {
 	return session->internals.record_buffer.byte_length;
 }
+
+#define NO_TIMEOUT_FUNC_SET(session) unlikely(session->internals.pull_timeout_func == gnutls_system_recv_timeout \
+	     && session->internals.pull_func != system_read)
 
 /*-
  * record_check_unprocessed:

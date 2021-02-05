@@ -56,6 +56,7 @@
 #include "expand_pic.h"
 #include "mc.h"
 #include "memory_align.h"
+#include "wels_decoder_thread.h"
 
 namespace WelsDec {
 #define MAX_PRED_MODE_ID_I16x16  3
@@ -64,6 +65,7 @@ namespace WelsDec {
 #define  WELS_QP_MAX    51
 
 #define LONG_TERM_REF
+#define IMinInt32 -0x7FFFFFFF
 typedef struct SWels_Cabac_Element {
   uint8_t uiState;
   uint8_t uiMPS;
@@ -81,6 +83,7 @@ typedef struct {
 #define NEW_CTX_OFFSET_MB_TYPE_I 3
 #define NEW_CTX_OFFSET_SKIP 11
 #define NEW_CTX_OFFSET_SUBMB_TYPE 21
+#define NEW_CTX_OFFSET_B_SUBMB_TYPE 36
 #define NEW_CTX_OFFSET_MVD 40
 #define NEW_CTX_OFFSET_REF_NO 54
 #define NEW_CTX_OFFSET_DELTA_QP 60
@@ -171,6 +174,7 @@ typedef struct tagDeblockingFilter {
   int8_t  iChromaQP[2];
   int8_t  iLumaQP;
   struct TagDeblockingFunc*  pLoopf;
+  PPicture* pRefPics[LIST_A];
 } SDeblockingFilter, *PDeblockingFilter;
 
 typedef void (*PDeblockingFilterMbFunc) (PDqLayer pCurDqLayer, PDeblockingFilter  filter, int32_t boundry_flag);
@@ -213,7 +217,7 @@ typedef  struct  TagBlockFunc {
 } SBlockFunc;
 
 typedef void (*PWelsFillNeighborMbInfoIntra4x4Func) (PWelsNeighAvail pNeighAvail, uint8_t* pNonZeroCount,
-    int8_t* pIntraPredMode, PDqLayer pCurLayer);
+    int8_t* pIntraPredMode, PDqLayer pCurDqLayer);
 typedef void (*PWelsMapNeighToSample) (PWelsNeighAvail pNeighAvail, int32_t* pSampleAvail);
 typedef void (*PWelsMap16NeighToSample) (PWelsNeighAvail pNeighAvail, uint8_t* pSampleAvail);
 typedef int32_t (*PWelsParseIntra4x4ModeFunc) (PWelsNeighAvail pNeighAvail, int8_t* pIntraPredMode, PBitStringAux pBs,
@@ -227,121 +231,21 @@ enum {
   OVERWRITE_SUBSETSPS = 1 << 2
 };
 
-/*
- *  SWelsDecoderContext: to maintail all modules data over decoder@framework
- */
 
-typedef struct TagWelsDecoderContext {
-  SLogContext sLogCtx;
-// Input
-  void*                         pArgDec;                        // structured arguments for decoder, reserved here for extension in the future
-
-  SDataBuffer                   sRawData;
-  SDataBuffer                   sSavedData; //for parse only purpose
-
-// Configuration
-  SDecodingParam*               pParam;
-  uint32_t                      uiCpuFlag;                      // CPU compatibility detected
-
-  VIDEO_BITSTREAM_TYPE eVideoType; //indicate the type of video to decide whether or not to do qp_delta error detection.
-  bool                          bHaveGotMemory; // global memory for decoder context related ever requested?
-
-  int32_t                       iImgWidthInPixel;       // width of image in pixel reconstruction picture to be output
-  int32_t                       iImgHeightInPixel;// height of image in pixel reconstruction picture to be output
-  int32_t                       iLastImgWidthInPixel;   // width of image in last successful pixel reconstruction picture to be output
-  int32_t                       iLastImgHeightInPixel;// height of image in last successful pixel reconstruction picture to be output
-  bool bFreezeOutput; // indicating current frame freezing. Default: true
-
-
-// Derived common elements
-  SNalUnitHeader                sCurNalHead;
-  EWelsSliceType                eSliceType;                     // Slice type
-  int32_t                       iFrameNum;
-  int32_t                       iPrevFrameNum;          // frame number of previous frame well decoded for non-truncated mode yet
-  bool                          bLastHasMmco5;      //
-  int32_t                       iErrorCode;                     // error code return while decoding in case packets lost
-  SFmo                          sFmoList[MAX_PPS_COUNT];        // list for FMO storage
-  PFmo                          pFmo;                           // current fmo context after parsed slice_header
-  int32_t                       iActiveFmoNum;          // active count number of fmo context in list
-
-  /*needed info by decode slice level and mb level*/
-  int32_t
-  iDecBlockOffsetArray[24];     // address talbe for sub 4x4 block in intra4x4_mb, so no need to caculta the address every time.
-
-  struct {
-    int16_t*  pMbType[LAYER_NUM_EXCHANGEABLE];                      /* mb type */
-    int16_t (*pMv[LAYER_NUM_EXCHANGEABLE][LIST_A])[MB_BLOCK4x4_NUM][MV_A]; //[LAYER_NUM_EXCHANGEABLE   MB_BLOCK4x4_NUM*]
-    int8_t (*pRefIndex[LAYER_NUM_EXCHANGEABLE][LIST_A])[MB_BLOCK4x4_NUM];
-    bool*   pNoSubMbPartSizeLessThan8x8Flag[LAYER_NUM_EXCHANGEABLE];
-    bool*   pTransformSize8x8Flag[LAYER_NUM_EXCHANGEABLE];
-    int8_t* pLumaQp[LAYER_NUM_EXCHANGEABLE];        /*mb luma_qp*/
-    int8_t  (*pChromaQp[LAYER_NUM_EXCHANGEABLE])[2];                                        /*mb chroma_qp*/
-    int16_t (*pMvd[LAYER_NUM_EXCHANGEABLE][LIST_A])[MB_BLOCK4x4_NUM][MV_A]; //[LAYER_NUM_EXCHANGEABLE   MB_BLOCK4x4_NUM*]
-    uint16_t* pCbfDc[LAYER_NUM_EXCHANGEABLE];
-    int8_t  (*pNzc[LAYER_NUM_EXCHANGEABLE])[24];
-    int8_t  (*pNzcRs[LAYER_NUM_EXCHANGEABLE])[24];
-    int16_t (*pScaledTCoeff[LAYER_NUM_EXCHANGEABLE])[MB_COEFF_LIST_SIZE]; /*need be aligned*/
-    int8_t  (*pIntraPredMode[LAYER_NUM_EXCHANGEABLE])[8]; //0~3 top4x4 ; 4~6 left 4x4; 7 intra16x16
-    int8_t (*pIntra4x4FinalMode[LAYER_NUM_EXCHANGEABLE])[MB_BLOCK4x4_NUM];
-    uint8_t* pIntraNxNAvailFlag[LAYER_NUM_EXCHANGEABLE];
-    int8_t*  pChromaPredMode[LAYER_NUM_EXCHANGEABLE];
-    int8_t*  pCbp[LAYER_NUM_EXCHANGEABLE];
-    uint8_t (*pMotionPredFlag[LAYER_NUM_EXCHANGEABLE][LIST_A])[MB_PARTITION_SIZE]; // 8x8
-    int8_t (*pSubMbType[LAYER_NUM_EXCHANGEABLE])[MB_SUB_PARTITION_SIZE];
-    int32_t* pSliceIdc[LAYER_NUM_EXCHANGEABLE];         // using int32_t for slice_idc
-    int8_t*  pResidualPredFlag[LAYER_NUM_EXCHANGEABLE];
-    int8_t*  pInterPredictionDoneFlag[LAYER_NUM_EXCHANGEABLE];
-    bool*    pMbCorrectlyDecodedFlag[LAYER_NUM_EXCHANGEABLE];
-    bool*    pMbRefConcealedFlag[LAYER_NUM_EXCHANGEABLE];
-    uint32_t iMbWidth;
-    uint32_t iMbHeight;
-  } sMb;
-
-// reconstruction picture
-  PPicture                      pDec;                   //pointer to current picture being reconstructed
-
-// reference pictures
-  SRefPic                       sRefPic;
-
-  SVlcTable                     sVlcTable;               // vlc table
-
-  SBitStringAux                 sBs;
-  int32_t iMaxBsBufferSizeInByte; //actual memory size for BS buffer
-
-  /* Global memory external */
-
-  SPosOffset sFrameCrop;
+//Decoder SPS and PPS global CTX
+typedef struct tagWelsWelsDecoderSpsPpsCTX {
+  SPosOffset                    sFrameCrop;
 
   SSps                          sSpsBuffer[MAX_SPS_COUNT + 1];
   SPps                          sPpsBuffer[MAX_PPS_COUNT + 1];
-  PSliceHeader                  pSliceHeader;
-
-  PPicBuff                      pPicBuff[LIST_A];       // Initially allocated memory for pictures which are used in decoding.
-  int32_t                       iPicQueueNumber;
 
   SSubsetSps                    sSubsetSpsBuffer[MAX_SPS_COUNT + 1];
   SNalUnit                      sPrefixNal;
 
-  PAccessUnit                   pAccessUnitList;        // current access unit list to be performed
   PSps                          pActiveLayerSps[MAX_LAYER_NUM];
-  PSps                          pSps;   // used by current AU
-  PPps                          pPps;   // used by current AU
-// Memory for pAccessUnitList is dynamically held till decoder destruction.
-  PDqLayer                      pCurDqLayer;            // current DQ layer representation, also carry reference base layer if applicable
-  PDqLayer                      pDqLayersList[LAYER_NUM_EXCHANGEABLE];  // DQ layers list with memory allocated
-
-  int32_t                       iPicWidthReq;             // picture width have requested the memory
-  int32_t                       iPicHeightReq;            // picture height have requested the memory
-
-  uint8_t                       uiTargetDqId;           // maximal DQ ID in current access unit, meaning target layer ID
   bool                          bAvcBasedFlag;          // For decoding bitstream:
-  bool                          bEndOfStreamFlag;       // Flag on end of stream requested by external application layer
-  bool                          bInstantDecFlag;        // Flag for no-delay decoding
-  bool                          bInitialDqLayersMem;    // dq layers related memory is available?
 
-  bool                          bOnlyOneLayerInCurAuFlag; //only one layer in current AU: 1
-
-// for EC parameter sets
+  // for EC parameter sets
   bool                          bSpsExistAheadFlag;     // whether does SPS NAL exist ahead of sequence?
   bool                          bSubspsExistAheadFlag;// whether does Subset SPS NAL exist ahead of sequence?
   bool                          bPpsExistAheadFlag;     // whether does PPS NAL exist ahead of sequence?
@@ -359,20 +263,173 @@ typedef struct TagWelsDecoderContext {
   int32_t                       iSPSInvalidNum;
   int32_t                       iSubSPSLastInvalidId;
   int32_t                       iSubSPSInvalidNum;
+  int32_t                       iSeqId; //sequence id
+  int                           iOverwriteFlags;
+} SWelsDecoderSpsPpsCTX, *PWelsDecoderSpsPpsCTX;
+
+//Last Decoded Picture Info
+typedef struct tagSWelsLastDecPicInfo {
+  // Save the last nal header info
+  SNalUnitHeaderExt sLastNalHdrExt;
+  SSliceHeader      sLastSliceHeader;
+  int32_t           iPrevPicOrderCntMsb;
+  int32_t           iPrevPicOrderCntLsb;
+  PPicture          pPreviousDecodedPictureInDpb; //pointer to previously decoded picture in DPB for error concealment
+  int32_t           iPrevFrameNum;// frame number of previous frame well decoded for non-truncated mode yet
+  bool              bLastHasMmco5;
+  uint32_t          uiDecodingTimeStamp; //represent relative decoding time stamps
+} SWelsLastDecPicInfo, *PWelsLastDecPicInfo;
+
+typedef struct tagPictInfo {
+  SBufferInfo             sBufferInfo;
+  int32_t                 iPOC;
+  int32_t                 iPicBuffIdx;
+  uint32_t                uiDecodingTimeStamp;
+  bool                    bLastGOP;
+} SPictInfo, *PPictInfo;
+
+typedef struct tagPictReoderingStatus {
+  int32_t iPictInfoIndex;
+  int32_t iMinPOC;
+  int32_t iNumOfPicts;
+  int32_t iLastGOPRemainPicts;
+  int32_t iLastWrittenPOC;
+  int32_t iLargestBufferedPicIndex;
+} SPictReoderingStatus, *PPictReoderingStatus;
+
+/*
+ *  SWelsDecoderContext: to maintail all modules data over decoder@framework
+ */
+
+typedef struct TagWelsDecoderContext {
+  SLogContext sLogCtx;
+// Input
+  void*
+  pArgDec;                        // structured arguments for decoder, reserved here for extension in the future
+
+  SDataBuffer                   sRawData;
+  SDataBuffer                   sSavedData; //for parse only purpose
+
+// Configuration
+  SDecodingParam*               pParam;
+  uint32_t                      uiCpuFlag;                      // CPU compatibility detected
+
+  VIDEO_BITSTREAM_TYPE eVideoType; //indicate the type of video to decide whether or not to do qp_delta error detection.
+  bool                          bHaveGotMemory; // global memory for decoder context related ever requested?
+
+  int32_t                       iImgWidthInPixel;       // width of image in pixel reconstruction picture to be output
+  int32_t                       iImgHeightInPixel;// height of image in pixel reconstruction picture to be output
+  int32_t
+  iLastImgWidthInPixel;   // width of image in last successful pixel reconstruction picture to be output
+  int32_t
+  iLastImgHeightInPixel;// height of image in last successful pixel reconstruction picture to be output
+  bool bFreezeOutput; // indicating current frame freezing. Default: true
+
+
+// Derived common elements
+  SNalUnitHeader                sCurNalHead;
+  EWelsSliceType                eSliceType;                     // Slice type
+  bool                          bUsedAsRef;                     //flag as ref
+  int32_t                       iFrameNum;
+  int32_t                       iErrorCode;                     // error code return while decoding in case packets lost
+  SFmo                          sFmoList[MAX_PPS_COUNT];        // list for FMO storage
+  PFmo                          pFmo;                           // current fmo context after parsed slice_header
+  int32_t                       iActiveFmoNum;          // active count number of fmo context in list
+
+  /*needed info by decode slice level and mb level*/
+  int32_t
+  iDecBlockOffsetArray[24];     // address talbe for sub 4x4 block in intra4x4_mb, so no need to caculta the address every time.
+
+  struct {
+    uint32_t*  pMbType[LAYER_NUM_EXCHANGEABLE];                      /* mb type */
+    int16_t (*pMv[LAYER_NUM_EXCHANGEABLE][LIST_A])[MB_BLOCK4x4_NUM][MV_A]; //[LAYER_NUM_EXCHANGEABLE   MB_BLOCK4x4_NUM*]
+    int8_t (*pRefIndex[LAYER_NUM_EXCHANGEABLE][LIST_A])[MB_BLOCK4x4_NUM];
+    int8_t (*pDirect[LAYER_NUM_EXCHANGEABLE])[MB_BLOCK4x4_NUM];
+    bool*   pNoSubMbPartSizeLessThan8x8Flag[LAYER_NUM_EXCHANGEABLE];
+    bool*   pTransformSize8x8Flag[LAYER_NUM_EXCHANGEABLE];
+    int8_t* pLumaQp[LAYER_NUM_EXCHANGEABLE];        /*mb luma_qp*/
+    int8_t (*pChromaQp[LAYER_NUM_EXCHANGEABLE])[2];                                         /*mb chroma_qp*/
+    int16_t (*pMvd[LAYER_NUM_EXCHANGEABLE][LIST_A])[MB_BLOCK4x4_NUM][MV_A]; //[LAYER_NUM_EXCHANGEABLE   MB_BLOCK4x4_NUM*]
+    uint16_t* pCbfDc[LAYER_NUM_EXCHANGEABLE];
+    int8_t (*pNzc[LAYER_NUM_EXCHANGEABLE])[24];
+    int8_t (*pNzcRs[LAYER_NUM_EXCHANGEABLE])[24];
+    int16_t (*pScaledTCoeff[LAYER_NUM_EXCHANGEABLE])[MB_COEFF_LIST_SIZE]; /*need be aligned*/
+    int8_t (*pIntraPredMode[LAYER_NUM_EXCHANGEABLE])[8];  //0~3 top4x4 ; 4~6 left 4x4; 7 intra16x16
+    int8_t (*pIntra4x4FinalMode[LAYER_NUM_EXCHANGEABLE])[MB_BLOCK4x4_NUM];
+    uint8_t* pIntraNxNAvailFlag[LAYER_NUM_EXCHANGEABLE];
+    int8_t*  pChromaPredMode[LAYER_NUM_EXCHANGEABLE];
+    int8_t*  pCbp[LAYER_NUM_EXCHANGEABLE];
+    uint8_t (*pMotionPredFlag[LAYER_NUM_EXCHANGEABLE][LIST_A])[MB_PARTITION_SIZE]; // 8x8
+    uint32_t (*pSubMbType[LAYER_NUM_EXCHANGEABLE])[MB_SUB_PARTITION_SIZE];
+    int32_t* pSliceIdc[LAYER_NUM_EXCHANGEABLE];         // using int32_t for slice_idc
+    int8_t*  pResidualPredFlag[LAYER_NUM_EXCHANGEABLE];
+    int8_t*  pInterPredictionDoneFlag[LAYER_NUM_EXCHANGEABLE];
+    bool*    pMbCorrectlyDecodedFlag[LAYER_NUM_EXCHANGEABLE];
+    bool*    pMbRefConcealedFlag[LAYER_NUM_EXCHANGEABLE];
+    uint32_t iMbWidth;
+    uint32_t iMbHeight;
+  } sMb;
+
+
+// reconstruction picture
+  PPicture                      pDec;                   //pointer to current picture being reconstructed
+
+  PPicture
+  pTempDec;               //pointer to temp decoder picture to be used only for Bi Prediction.
+
+// reference pictures
+  SRefPic                       sRefPic;
+  SRefPic                       sTmpRefPic; //used to temporarily save RefPic for next active thread
+  SVlcTable*                    pVlcTable;               // vlc table
+
+  SBitStringAux                 sBs;
+  int32_t iMaxBsBufferSizeInByte; //actual memory size for BS buffer
+
+  /* Global memory external */
+  SWelsDecoderSpsPpsCTX        sSpsPpsCtx;
+  bool                         bHasNewSps;
+
+  SPosOffset sFrameCrop;
+
+  PSliceHeader                  pSliceHeader;
+
+  PPicBuff                      pPicBuff;       // Initially allocated memory for pictures which are used in decoding.
+  int32_t                       iPicQueueNumber;
+
+  PAccessUnit                   pAccessUnitList;        // current access unit list to be performed
+  //PSps                          pActiveLayerSps[MAX_LAYER_NUM];
+  PSps                          pSps;   // used by current AU
+  PPps                          pPps;   // used by current AU
+// Memory for pAccessUnitList is dynamically held till decoder destruction.
+  PDqLayer
+  pCurDqLayer;            // current DQ layer representation, also carry reference base layer if applicable
+  PDqLayer                      pDqLayersList[LAYER_NUM_EXCHANGEABLE];  // DQ layers list with memory allocated
+  PNalUnit                      pNalCur;          // point to current NAL Nnit
+  uint8_t                       uiNalRefIdc;      // NalRefIdc for easy access;
+  int32_t                       iPicWidthReq;             // picture width have requested the memory
+  int32_t                       iPicHeightReq;            // picture height have requested the memory
+
+  uint8_t                       uiTargetDqId;           // maximal DQ ID in current access unit, meaning target layer ID
+  //bool                          bAvcBasedFlag;          // For decoding bitstream:
+  bool                          bEndOfStreamFlag;       // Flag on end of stream requested by external application layer
+  bool                          bInstantDecFlag;        // Flag for no-delay decoding
+  bool                          bInitialDqLayersMem;    // dq layers related memory is available?
+
+  bool                          bOnlyOneLayerInCurAuFlag; //only one layer in current AU: 1
 
   bool                          bReferenceLostAtT0Flag;
   int32_t                       iTotalNumMbRec; //record current number of decoded MB
 #ifdef LONG_TERM_REF
   bool                          bParamSetsLostFlag;     //sps or pps do not exist or not correct
 
-  bool                          bCurAuContainLtrMarkSeFlag; //current AU has the LTR marking syntax element, mark the previous frame or self
+  bool
+  bCurAuContainLtrMarkSeFlag; //current AU has the LTR marking syntax element, mark the previous frame or self
   int32_t                       iFrameNumOfAuMarkedLtr; //if bCurAuContainLtrMarkSeFlag==true, SHOULD set this variable
 
   uint16_t                      uiCurIdrPicId;
 #endif
   bool       bNewSeqBegin;
   bool       bNextNewSeqBegin;
-  int        iOverwriteFlags;
 
 //for Parse only
   bool bFramePending;
@@ -384,7 +441,7 @@ typedef struct TagWelsDecoderContext {
   SPpsBsInfo sPpsBsInfo [MAX_PPS_COUNT];
   SParserBsInfo* pParserBsInfo;
 
-  PPicture pPreviousDecodedPictureInDpb; //pointer to previously decoded picture in DPB for error concealment
+  //PPicture pPreviousDecodedPictureInDpb; //pointer to previously decoded picture in DPB for error concealment
   PGetIntraPredFunc pGetI16x16LumaPredFunc[7];          //h264_predict_copy_16x16;
   PGetIntraPredFunc pGetI4x4LumaPredFunc[14];           // h264_predict_4x4_t
   PGetIntraPredFunc pGetIChromaPredFunc[7];             // h264_predict_8x8_t
@@ -424,15 +481,14 @@ typedef struct TagWelsDecoderContext {
 //trace handle
   void*      pTraceHandle;
 
-//Save the last nal header info
-  SNalUnitHeaderExt sLastNalHdrExt;
-  SSliceHeader      sLastSliceHeader;
+  PWelsLastDecPicInfo pLastDecPicInfo;
+
   SWelsCabacCtx sWelsCabacContexts[4][WELS_QP_MAX + 1][WELS_CONTEXT_COUNT];
   bool bCabacInited;
   SWelsCabacCtx   pCabacCtx[WELS_CONTEXT_COUNT];
   PWelsCabacDecEngine   pCabacDecEngine;
   double dDecTime;
-  SDecoderStatistics sDecoderStatistics;// For real time debugging
+  SDecoderStatistics* pDecoderStatistics; // For real time debugging
   int32_t iMbEcedNum;
   int32_t iMbEcedPropNum;
   int32_t iMbNum;
@@ -441,6 +497,7 @@ typedef struct TagWelsDecoderContext {
   int32_t iECMVs[16][2];
   PPicture pECRefPic[16];
   unsigned long long uiTimeStamp;
+  uint32_t    uiDecodingTimeStamp; //represent relative decoding time stamps
 // To support scaling list HP
   uint16_t  pDequant_coeff_buffer4x4[6][52][16];
   uint16_t  pDequant_coeff_buffer8x8[6][52][64];
@@ -450,14 +507,55 @@ typedef struct TagWelsDecoderContext {
   bool bDequantCoeff4x4Init;
   bool bUseScalingList;
   CMemoryAlign*     pMemAlign;
+  void* pThreadCtx;
+  void* pLastThreadCtx;
+  WELS_MUTEX* pCsDecoder;
+  int16_t lastReadyHeightOffset[LIST_A][MAX_REF_PIC_COUNT]; //last ready reference MB offset
+  PPictInfo               pPictInfoList;
+  PPictReoderingStatus    pPictReoderingStatus;
 } SWelsDecoderContext, *PWelsDecoderContext;
+
+typedef struct tagSWelsDecThread {
+  SWelsDecSemphore* sIsBusy;
+  SWelsDecSemphore sIsActivated;
+  SWelsDecSemphore sIsIdle;
+  SWelsDecThread sThrHandle;
+  uint32_t uiCommand;
+  uint32_t uiThrNum;
+  uint32_t uiThrMaxNum;
+  uint32_t uiThrStackSize;
+  DECLARE_PROCTHREAD_PTR (pThrProcMain);
+} SWelsDecThreadInfo, *PWelsDecThreadInfo;
+
+typedef struct tagSWelsDecThreadCtx {
+  SWelsDecThreadInfo sThreadInfo;
+  PWelsDecoderContext pCtx;
+  void* threadCtxOwner;
+  uint8_t* kpSrc;
+  int32_t kiSrcLen;
+  uint8_t** ppDst;
+  SBufferInfo sDstInfo;
+  PPicture pDec;
+  SWelsDecEvent sImageReady;
+  SWelsDecEvent sSliceDecodeStart;
+  SWelsDecEvent sSliceDecodeFinish;
+  int32_t       iPicBuffIdx; //picBuff Index
+} SWelsDecoderThreadCTX, *PWelsDecoderThreadCTX;
 
 static inline void ResetActiveSPSForEachLayer (PWelsDecoderContext pCtx) {
   if (pCtx->iTotalNumMbRec == 0) {
     for (int i = 0; i < MAX_LAYER_NUM; i++) {
-      pCtx->pActiveLayerSps[i] = NULL;
+      pCtx->sSpsPpsCtx.pActiveLayerSps[i] = NULL;
     }
   }
+}
+static inline int32_t GetThreadCount (PWelsDecoderContext pCtx) {
+  int32_t iThreadCount = 0;
+  if (pCtx->pThreadCtx != NULL) {
+    PWelsDecoderThreadCTX pThreadCtx = (PWelsDecoderThreadCTX)pCtx->pThreadCtx;
+    iThreadCount = pThreadCtx->sThreadInfo.uiThrMaxNum;
+  }
+  return iThreadCount;
 }
 //#ifdef __cplusplus
 //}

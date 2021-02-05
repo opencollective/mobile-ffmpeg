@@ -38,6 +38,60 @@ static INLINE MV_CLASS_TYPE get_mv_class(int z, int *offset) {
   return c;
 }
 
+static void update_mv_component_stats(int comp, nmv_component *mvcomp,
+                                      MvSubpelPrecision precision) {
+  assert(comp != 0);
+  int offset;
+  const int sign = comp < 0;
+  const int mag = sign ? -comp : comp;
+  const int mv_class = get_mv_class(mag - 1, &offset);
+  const int d = offset >> 3;         // int mv data
+  const int fr = (offset >> 1) & 3;  // fractional mv data
+  const int hp = offset & 1;         // high precision mv data
+
+  // Sign
+  update_cdf(mvcomp->sign_cdf, sign, 2);
+
+  // Class
+  update_cdf(mvcomp->classes_cdf, mv_class, MV_CLASSES);
+
+  // Integer bits
+  if (mv_class == MV_CLASS_0) {
+    update_cdf(mvcomp->class0_cdf, d, CLASS0_SIZE);
+  } else {
+    const int n = mv_class + CLASS0_BITS - 1;  // number of bits
+    for (int i = 0; i < n; ++i)
+      update_cdf(mvcomp->bits_cdf[i], (d >> i) & 1, 2);
+  }
+  // Fractional bits
+  if (precision > MV_SUBPEL_NONE) {
+    aom_cdf_prob *fp_cdf =
+        mv_class == MV_CLASS_0 ? mvcomp->class0_fp_cdf[d] : mvcomp->fp_cdf;
+    update_cdf(fp_cdf, fr, MV_FP_SIZE);
+  }
+
+  // High precision bit
+  if (precision > MV_SUBPEL_LOW_PRECISION) {
+    aom_cdf_prob *hp_cdf =
+        mv_class == MV_CLASS_0 ? mvcomp->class0_hp_cdf : mvcomp->hp_cdf;
+    update_cdf(hp_cdf, hp, 2);
+  }
+}
+
+void av1_update_mv_stats(const MV *mv, const MV *ref, nmv_context *mvctx,
+                         MvSubpelPrecision precision) {
+  const MV diff = { mv->row - ref->row, mv->col - ref->col };
+  const MV_JOINT_TYPE j = av1_get_mv_joint(&diff);
+
+  update_cdf(mvctx->joints_cdf, j, MV_JOINTS);
+
+  if (mv_joint_vertical(j))
+    update_mv_component_stats(diff.row, &mvctx->comps[0], precision);
+
+  if (mv_joint_horizontal(j))
+    update_mv_component_stats(diff.col, &mvctx->comps[1], precision);
+}
+
 static void encode_mv_component(aom_writer *w, int comp, nmv_component *mvcomp,
                                 MvSubpelPrecision precision) {
   assert(comp != 0);
@@ -141,6 +195,8 @@ void av1_encode_mv(AV1_COMP *cpi, aom_writer *w, const MV *mv, const MV *ref,
                    nmv_context *mvctx, int usehp) {
   const MV diff = { mv->row - ref->row, mv->col - ref->col };
   const MV_JOINT_TYPE j = av1_get_mv_joint(&diff);
+  // If the mv_diff is zero, then we should have used near or nearest instead.
+  assert(j != MV_JOINT_ZERO);
   if (cpi->common.cur_frame_force_integer_mv) {
     usehp = MV_SUBPEL_NONE;
   }
@@ -153,7 +209,7 @@ void av1_encode_mv(AV1_COMP *cpi, aom_writer *w, const MV *mv, const MV *ref,
 
   // If auto_mv_step_size is enabled then keep track of the largest
   // motion vector component used.
-  if (cpi->sf.mv.auto_mv_step_size) {
+  if (cpi->sf.mv_sf.auto_mv_step_size) {
     unsigned int maxv = AOMMAX(abs(mv->row), abs(mv->col)) >> 3;
     cpi->max_mv_magnitude = AOMMAX(maxv, cpi->max_mv_magnitude);
   }

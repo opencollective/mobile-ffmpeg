@@ -511,6 +511,20 @@ const struct cipher_vectors_st gost28147_tc26z_cfb_vectors[] = {
 	},
 };
 
+const struct cipher_vectors_st gost28147_tc26z_cnt_vectors[] = {
+	{
+	 STR(key, key_size,
+	     "\x59\x9f\x84\xba\xc3\xf3\xd2\xf1\x60\xe1\xe3\xf2\x6a\x96\x1a\xf9"
+	     "\x9c\x48\xb2\x4e\xbc\xbb\xbf\x7c\xd8\xf3\xac\xcd\x96\x8d\x28\x6a"),
+	 STR(plaintext, plaintext_size,
+	     "\x90\xa2\x39\x66\xae\x01\xb9\xa3\x52\x4e\xc8\xed\x6c\xdd\x88\x30"),
+	 .ciphertext = (uint8_t *)
+		 "\xe8\xb1\x4f\xc7\x30\xdc\x25\xbb\x36\xba\x64\x3c\x17\xdb\xff\x99",
+	 STR(iv, iv_size,
+	     "\x8d\xaf\xa8\xd1\x58\xed\x05\x8d"),
+	}
+};
+
 const struct cipher_vectors_st aes128_xts_vectors[] = {
 	{
 	 STR(key, key_size,
@@ -554,6 +568,19 @@ const struct cipher_vectors_st aes256_xts_vectors[] = {
 	 STR(iv, iv_size,
 	     "\xad\xf8\xd9\x26\x27\x46\x4a\xd2\xf0\x42\x8e\x84\xa9\xf8\x75\x64"),
 	 },
+};
+
+const struct cipher_vectors_st chacha20_32_vectors[] = { /* RFC8439 */
+	{
+	 STR(key, key_size,
+	     "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f"),
+	 STR(plaintext, plaintext_size,
+	     "\x4c\x61\x64\x69\x65\x73\x20\x61\x6e\x64\x20\x47\x65\x6e\x74\x6c\x65\x6d\x65\x6e\x20\x6f\x66\x20\x74\x68\x65\x20\x63\x6c\x61\x73\x73\x20\x6f\x66\x20\x27\x39\x39\x3a\x20\x49\x66\x20\x49\x20\x63\x6f\x75\x6c\x64\x20\x6f\x66\x66\x65\x72\x20\x79\x6f\x75\x20\x6f\x6e\x6c\x79\x20\x6f\x6e\x65\x20\x74\x69\x70\x20\x66\x6f\x72\x20\x74\x68\x65\x20\x66\x75\x74\x75\x72\x65\x2c\x20\x73\x75\x6e\x73\x63\x72\x65\x65\x6e\x20\x77\x6f\x75\x6c\x64\x20\x62\x65\x20\x69\x74\x2e"),
+	 .ciphertext = (uint8_t *)
+	     "\x6e\x2e\x35\x9a\x25\x68\xf9\x80\x41\xba\x07\x28\xdd\x0d\x69\x81\xe9\x7e\x7a\xec\x1d\x43\x60\xc2\x0a\x27\xaf\xcc\xfd\x9f\xae\x0b\xf9\x1b\x65\xc5\x52\x47\x33\xab\x8f\x59\x3d\xab\xcd\x62\xb3\x57\x16\x39\xd6\x24\xe6\x51\x52\xab\x8f\x53\x0c\x35\x9f\x08\x61\xd8\x07\xca\x0d\xbf\x50\x0d\x6a\x61\x56\xa3\x8e\x08\x8a\x22\xb6\x5e\x52\xbc\x51\x4d\x16\xcc\xf8\x06\x81\x8c\xe9\x1a\xb7\x79\x37\x36\x5a\xf9\x0b\xbf\x74\xa3\x5b\xe6\xb4\x0b\x8e\xed\xf2\x78\x5e\x42\x87\x4d",
+	 STR(iv, iv_size,
+	     "\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x4a\x00\x00\x00\x00")
+	},
 };
 
 static int test_cipher(gnutls_cipher_algorithm_t cipher,
@@ -687,6 +714,107 @@ static int test_cipher(gnutls_cipher_algorithm_t cipher,
 		}
 
 		gnutls_cipher_deinit(hd);
+	}
+
+	_gnutls_debug_log
+	    ("%s self check succeeded\n",
+	     gnutls_cipher_get_name(cipher));
+
+	return 0;
+}
+
+static int test_cipher_all_block_sizes(gnutls_cipher_algorithm_t cipher,
+				       const struct cipher_vectors_st *vectors,
+				       size_t vectors_size, unsigned flags)
+{
+	gnutls_cipher_hd_t hd;
+	int ret;
+	unsigned int i;
+	uint8_t tmp[384];
+	gnutls_datum_t key, iv = {NULL, 0};
+	size_t block;
+	size_t offset;
+
+	for (i = 0; i < vectors_size; i++) {
+		for (block = 1; block <= vectors[i].plaintext_size; block++) {
+			key.data = (void *) vectors[i].key;
+			key.size = vectors[i].key_size;
+
+			iv.data = (void *) vectors[i].iv;
+			iv.size = gnutls_cipher_get_iv_size(cipher);
+
+			if (iv.size != vectors[i].iv_size)
+				return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
+
+			ret = gnutls_cipher_init(&hd, cipher, &key, &iv);
+			if (ret < 0) {
+				_gnutls_debug_log("error initializing: %s\n",
+						  gnutls_cipher_get_name(cipher));
+				return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
+			}
+
+			for (offset = 0;
+			     offset < vectors[i].plaintext_size;
+			     offset += block) {
+				ret =
+				    gnutls_cipher_encrypt2(hd,
+							   vectors[i].plaintext + offset,
+							   MIN(block, vectors[i].plaintext_size - offset),
+							   tmp + offset,
+							   sizeof(tmp) - offset);
+				if (ret < 0)
+					return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
+			}
+
+			if (memcmp
+			    (tmp, vectors[i].ciphertext,
+			     vectors[i].plaintext_size) != 0) {
+				_gnutls_debug_log("%s encryption of test vector %d failed with block size %d/%d!\n",
+						  gnutls_cipher_get_name(cipher),
+						  i, (int)block, (int)vectors[i].plaintext_size);
+				return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
+			}
+
+			gnutls_cipher_deinit(hd);
+		}
+	}
+
+	for (i = 0; i < vectors_size; i++) {
+		for (block = 1; block <= vectors[i].plaintext_size; block++) {
+			key.data = (void *) vectors[i].key;
+			key.size = vectors[i].key_size;
+
+			iv.data = (void *) vectors[i].iv;
+			iv.size = gnutls_cipher_get_iv_size(cipher);
+
+			ret = gnutls_cipher_init(&hd, cipher, &key, &iv);
+			if (ret < 0)
+				return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
+
+			for (offset = 0;
+			     offset + block <= vectors[i].plaintext_size;
+			     offset += block) {
+				ret =
+				    gnutls_cipher_decrypt2(hd,
+							   vectors[i].ciphertext + offset,
+							   MIN(block, vectors[i].plaintext_size - offset),
+							   tmp + offset,
+							   sizeof(tmp) - offset);
+				if (ret < 0)
+					return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
+			}
+
+			if (memcmp
+			    (tmp, vectors[i].plaintext,
+			     vectors[i].plaintext_size) != 0) {
+				_gnutls_debug_log("%s decryption of test vector %d failed with block size %d!\n",
+						  gnutls_cipher_get_name(cipher),
+						  i, (int)block);
+				return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
+			}
+
+			gnutls_cipher_deinit(hd);
+		}
 	}
 
 	_gnutls_debug_log
@@ -1355,6 +1483,7 @@ static int test_digest(gnutls_digest_algorithm_t dig,
 	int ret;
 	size_t data_size;
 	gnutls_hash_hd_t hd;
+	gnutls_hash_hd_t copy;
 
 	if (_gnutls_digest_exists(dig) == 0)
 		return 0;
@@ -1369,6 +1498,12 @@ static int test_digest(gnutls_digest_algorithm_t dig,
 
 		ret = gnutls_hash(hd, vectors[i].plaintext, 1);
 		if (ret < 0)
+			return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
+
+		copy = gnutls_hash_copy(hd);
+		/* Returning NULL is not an error here for the time being, but
+		 * it might become one later */
+		if (!copy && secure_getenv("GNUTLS_TEST_SUITE_RUN"))
 			return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
 
 		ret = gnutls_hash(hd,
@@ -1390,6 +1525,24 @@ static int test_digest(gnutls_digest_algorithm_t dig,
 					  gnutls_digest_get_name(dig), i);
 			return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
 		}
+
+		if (copy != NULL) {
+			ret = gnutls_hash(copy,
+					  &vectors[i].plaintext[1],
+					  vectors[i].plaintext_size - 1);
+			if (ret < 0)
+				return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
+
+			memset(data, 0xaa, data_size);
+			gnutls_hash_deinit(copy, data);
+
+			if (memcmp(data, vectors[i].output,
+			    vectors[i].output_size) != 0) {
+				_gnutls_debug_log("%s copy test vector %d failed!\n",
+						  gnutls_digest_get_name(dig), i);
+				return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
+			}
+		}
 	}
 
 	_gnutls_debug_log("%s self check succeeded\n",
@@ -1402,6 +1555,8 @@ static int test_digest(gnutls_digest_algorithm_t dig,
 struct mac_vectors_st {
 	const uint8_t *key;
 	unsigned int key_size;
+	const uint8_t *nonce;
+	unsigned int nonce_size;
 	const uint8_t *plaintext;
 	unsigned int plaintext_size;
 	const uint8_t *output;
@@ -1535,6 +1690,59 @@ const struct mac_vectors_st aes_cmac_256_vectors[] = { /* NIST SP800-38A */
 	 },
 };
 
+const struct mac_vectors_st aes_gmac_128_vectors[] = { /* NIST test vectors */
+	{
+	 STR(key, key_size,
+	     "\x23\x70\xe3\x20\xd4\x34\x42\x08\xe0\xff\x56\x83\xf2\x43\xb2\x13"),
+	 STR(nonce, nonce_size,
+	     "\x04\xdb\xb8\x2f\x04\x4d\x30\x83\x1c\x44\x12\x28"),
+	 STR(plaintext, plaintext_size,
+	     "\xd4\x3a\x8e\x50\x89\xee\xa0\xd0\x26\xc0\x3a\x85\x17\x8b\x27\xda"),
+	 STR(output, output_size,
+	     "\x2a\x04\x9c\x04\x9d\x25\xaa\x95\x96\x9b\x45\x1d\x93\xc3\x1c\x6e"),
+	},
+};
+
+const struct mac_vectors_st aes_gmac_192_vectors[] = { /* NIST test vectors */
+	{
+	 STR(key, key_size,
+	     "\xaa\x92\x1c\xb5\xa2\x43\xab\x08\x91\x1f\x32\x89\x26\x6b\x39\xda"
+	     "\xb1\x33\xf5\xc4\x20\xa6\xc5\xcd"),
+	 STR(nonce, nonce_size,
+	     "\x8f\x73\xdb\x68\xda\xee\xed\x2d\x15\x5f\xb1\xa0"),
+	 STR(plaintext, plaintext_size,
+	     "\x48\x74\x43\xc7\xc1\x4c\xe4\x74\xcb\x3d\x29\x1f\x25\x70\x70\xa2"),
+	 STR(output, output_size,
+	     "\xb1\x26\x74\xfb\xea\xc6\x88\x9a\x24\x94\x8f\x27\x92\xe3\x0a\x50"),
+	},
+};
+
+const struct mac_vectors_st aes_gmac_256_vectors[] = { /* NIST test vectors */
+	{
+	 STR(key, key_size,
+	     "\x6d\xfd\xaf\xd6\x70\x3c\x28\x5c\x01\xf1\x4f\xd1\x0a\x60\x12\x86"
+	     "\x2b\x2a\xf9\x50\xd4\x73\x3a\xbb\x40\x3b\x2e\x74\x5b\x26\x94\x5d"),
+	 STR(nonce, nonce_size,
+	     "\x37\x49\xd0\xb3\xd5\xba\xcb\x71\xbe\x06\xad\xe6"),
+	 STR(plaintext, plaintext_size,
+	     "\xc0\xd2\x49\x87\x19\x92\xe7\x03\x02\xae\x00\x81\x93\xd1\xe8\x9f"),
+	 STR(output, output_size,
+	     "\x4a\xa4\xcc\x69\xf8\x4e\xe6\xac\x16\xd9\xbf\xb4\xe0\x5d\xe5\x00"),
+	},
+};
+
+const struct mac_vectors_st gost28147_tc26z_imit_vectors[] = {
+	{
+		STR(key, key_size,
+		    "\x9d\x05\xb7\x9e\x90\xca\xd0\x0a\x2c\xda\xd2\x2e\xf4\xe8\x6f\x5c"
+		    "\xf5\xdc\x37\x68\x19\x85\xb3\xbf\xaa\x18\xc1\xc3\x05\x0a\x91\xa2"),
+		STR(plaintext, plaintext_size,
+		    "\xb5\xa1\xf0\xe3\xce\x2f\x02\x1d\x67\x61\x94\x34\x5c\x41\xe3\x6e"),
+		STR(output, output_size,
+		    "\x03\xe5\x67\x66"),
+	},
+};
+
 static int test_mac(gnutls_mac_algorithm_t mac,
 		    const struct mac_vectors_st *vectors,
 		    size_t vectors_size, unsigned flags)
@@ -1544,6 +1752,7 @@ static int test_mac(gnutls_mac_algorithm_t mac,
 	int ret;
 	size_t data_size;
 	gnutls_hmac_hd_t hd;
+	gnutls_hmac_hd_t copy;
 
 	for (i = 0; i < vectors_size; i++) {
 		ret = gnutls_hmac_init(&hd,
@@ -1556,8 +1765,19 @@ static int test_mac(gnutls_mac_algorithm_t mac,
 			return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
 		}
 
+		if (vectors[i].nonce_size)
+			gnutls_hmac_set_nonce(hd,
+					      vectors[i].nonce,
+					      vectors[i].nonce_size);
+
 		ret = gnutls_hmac(hd, vectors[i].plaintext, 1);
 		if (ret < 0)
+			return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
+
+		copy = gnutls_hmac_copy(hd);
+		/* Returning NULL is not an error here for the time being, but
+		 * it might become one later */
+		if (!copy && secure_getenv("GNUTLS_TEST_SUITE_RUN"))
 			return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
 
 		ret = gnutls_hmac(hd,
@@ -1582,6 +1802,25 @@ static int test_mac(gnutls_mac_algorithm_t mac,
 
 			return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
 		}
+
+		if (copy != NULL) {
+			ret = gnutls_hmac(copy,
+					  &vectors[i].plaintext[1],
+					  vectors[i].plaintext_size - 1);
+			if (ret < 0)
+				return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
+
+			memset(data, 0xaa, data_size);
+			gnutls_hmac_deinit(copy, data);
+
+			if (memcmp(data, vectors[i].output,
+			    vectors[i].output_size) != 0) {
+				_gnutls_debug_log
+					("MAC-%s copy test vector %d failed!\n",
+					 gnutls_mac_get_name(mac), i);
+				return gnutls_assert_val(GNUTLS_E_SELF_TEST_ERROR);
+			}
+		}
 	}
 
 	_gnutls_debug_log
@@ -1593,6 +1832,14 @@ static int test_mac(gnutls_mac_algorithm_t mac,
 
 #define CASE(x, func, vectors) case x: \
 			ret = func(x, V(vectors), flags); \
+			if (!(flags & GNUTLS_SELF_TEST_FLAG_ALL) || ret < 0) \
+				return ret
+
+#define CASE2(x, func, func2, vectors) case x:	  \
+			ret = func(x, V(vectors), flags); \
+			if (!(flags & GNUTLS_SELF_TEST_FLAG_ALL) || ret < 0) \
+				return ret; \
+			ret = func2(x, V(vectors), flags); \
 			if (!(flags & GNUTLS_SELF_TEST_FLAG_ALL) || ret < 0) \
 				return ret
 
@@ -1661,20 +1908,30 @@ int gnutls_cipher_self_test(unsigned flags, gnutls_cipher_algorithm_t cipher)
 		NON_FIPS_CASE(GNUTLS_CIPHER_CHACHA20_POLY1305, test_cipher_aead,
 		     chacha_poly1305_vectors);
 		FALLTHROUGH;
-		CASE(GNUTLS_CIPHER_AES_128_CFB8, test_cipher,
-		     aes128_cfb8_vectors);
+		CASE2(GNUTLS_CIPHER_AES_128_CFB8, test_cipher,
+		      test_cipher_all_block_sizes,
+		      aes128_cfb8_vectors);
 		FALLTHROUGH;
-		CASE(GNUTLS_CIPHER_AES_192_CFB8, test_cipher,
-		     aes192_cfb8_vectors);
+		CASE2(GNUTLS_CIPHER_AES_192_CFB8, test_cipher,
+		      test_cipher_all_block_sizes,
+		      aes192_cfb8_vectors);
 		FALLTHROUGH;
-		CASE(GNUTLS_CIPHER_AES_256_CFB8, test_cipher,
-		     aes256_cfb8_vectors);
+		CASE2(GNUTLS_CIPHER_AES_256_CFB8, test_cipher,
+		      test_cipher_all_block_sizes,
+		      aes256_cfb8_vectors);
 		FALLTHROUGH;
 		CASE(GNUTLS_CIPHER_AES_128_XTS, test_cipher,
 		     aes128_xts_vectors);
 		FALLTHROUGH;
 		CASE(GNUTLS_CIPHER_AES_256_XTS, test_cipher,
 		     aes256_xts_vectors);
+		FALLTHROUGH;
+		NON_FIPS_CASE(GNUTLS_CIPHER_CHACHA20_32, test_cipher,
+		     chacha20_32_vectors);
+		FALLTHROUGH;
+		/* The same test vector for _32 variant should work */
+		NON_FIPS_CASE(GNUTLS_CIPHER_CHACHA20_64, test_cipher,
+		     chacha20_32_vectors);
 #if ENABLE_GOST
 		FALLTHROUGH;
 		NON_FIPS_CASE(GNUTLS_CIPHER_GOST28147_CPA_CFB, test_cipher,
@@ -1691,6 +1948,9 @@ int gnutls_cipher_self_test(unsigned flags, gnutls_cipher_algorithm_t cipher)
 		FALLTHROUGH;
 		NON_FIPS_CASE(GNUTLS_CIPHER_GOST28147_TC26Z_CFB, test_cipher,
 			      gost28147_tc26z_cfb_vectors);
+		FALLTHROUGH;
+		NON_FIPS_CASE(GNUTLS_CIPHER_GOST28147_TC26Z_CNT, test_cipher,
+			      gost28147_tc26z_cnt_vectors);
 #endif
 		break;
 	default:
@@ -1738,11 +1998,19 @@ int gnutls_mac_self_test(unsigned flags, gnutls_mac_algorithm_t mac)
 		NON_FIPS_CASE(GNUTLS_MAC_STREEBOG_512, test_mac, hmac_streebog_512_vectors);
 		FALLTHROUGH;
 		NON_FIPS_CASE(GNUTLS_MAC_STREEBOG_256, test_mac, hmac_streebog_256_vectors);
+		FALLTHROUGH;
+		NON_FIPS_CASE(GNUTLS_MAC_GOST28147_TC26Z_IMIT, test_mac, gost28147_tc26z_imit_vectors);
 #endif
 		FALLTHROUGH;
 		CASE(GNUTLS_MAC_AES_CMAC_128, test_mac, aes_cmac_128_vectors);
 		FALLTHROUGH;
 		CASE(GNUTLS_MAC_AES_CMAC_256, test_mac, aes_cmac_256_vectors);
+		FALLTHROUGH;
+		CASE(GNUTLS_MAC_AES_GMAC_128, test_mac, aes_gmac_128_vectors);
+		FALLTHROUGH;
+		CASE(GNUTLS_MAC_AES_GMAC_192, test_mac, aes_gmac_192_vectors);
+		FALLTHROUGH;
+		CASE(GNUTLS_MAC_AES_GMAC_256, test_mac, aes_gmac_256_vectors);
 
 		break;
 	default:

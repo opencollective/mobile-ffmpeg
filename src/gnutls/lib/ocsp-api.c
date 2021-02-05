@@ -361,8 +361,8 @@ static int append_response(gnutls_certificate_credentials_t sc, unsigned idx,
  * If the response is already expired at the time of loading the code
  * %GNUTLS_E_EXPIRED is returned.
  *
- * Returns: On success, %GNUTLS_E_SUCCESS (0) is returned,
- *   otherwise a negative error code is returned.
+ * Returns: On success, the number of loaded responses is returned,
+ *   otherwise a negative error code.
  *
  * Since: 3.1.3
  **/
@@ -597,7 +597,8 @@ gnutls_certificate_get_ocsp_expiration(gnutls_certificate_credentials_t sc,
  *
  * When flags are zero this function returns non-zero if a valid OCSP status
  * response was included in the TLS handshake. That is, an OCSP status response
- * which is not too old or superseded. It returns zero otherwise.
+ * which is not too old, superseded or marks the certificate as revoked.
+ * It returns zero otherwise.
  *
  * When the flag %GNUTLS_OCSP_SR_IS_AVAIL is specified, the function
  * returns non-zero if an OCSP status response was included in the handshake
@@ -608,12 +609,16 @@ gnutls_certificate_get_ocsp_expiration(gnutls_certificate_credentials_t sc,
  * explicit OCSP validity check on the peer's certificate. Should be called after
  * any of gnutls_certificate_verify_peers*() are called.
  *
- * Returns: non zero if the response was valid, or a zero if it wasn't sent,
+ * This function is always usable on client side, but on server side only
+ * under TLS 1.3, which is the first version of TLS that allows cliend-side OCSP
+ * responses.
+ *
+ * Returns: Non-zero if the response was valid, or a zero if it wasn't sent,
  * or sent and was invalid.
  *
  * Since: 3.1.4
  **/
-int
+unsigned
 gnutls_ocsp_status_request_is_checked(gnutls_session_t session,
 				      unsigned int flags)
 {

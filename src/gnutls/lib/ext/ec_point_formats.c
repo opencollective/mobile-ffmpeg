@@ -41,7 +41,8 @@ const hello_ext_entry_st ext_mod_supported_ec_point_formats = {
 	.name = "Supported EC Point Formats",
 	.tls_id = 11,
 	.gid = GNUTLS_EXTENSION_SUPPORTED_EC_POINT_FORMATS,
-	.parse_type = GNUTLS_EXT_TLS,
+	.client_parse_point = GNUTLS_EXT_TLS,
+	.server_parse_point = GNUTLS_EXT_TLS,
 	.validity = GNUTLS_EXT_FLAG_TLS | GNUTLS_EXT_FLAG_DTLS |
 		    GNUTLS_EXT_FLAG_CLIENT_HELLO | GNUTLS_EXT_FLAG_TLS12_SERVER_HELLO,
 	.recv_func = _gnutls_supported_ec_point_formats_recv_params,
@@ -57,11 +58,10 @@ const hello_ext_entry_st ext_mod_supported_ec_point_formats = {
 static int
 _gnutls_supported_ec_point_formats_recv_params(gnutls_session_t session,
 				     const uint8_t * data,
-				     size_t _data_size)
+				     size_t data_size)
 {
-	int len, i;
+	size_t len, i;
 	int uncompressed = 0;
-	int data_size = _data_size;
 
 	if (session->security_parameters.entity == GNUTLS_CLIENT) {
 		if (data_size < 1)
@@ -91,7 +91,7 @@ _gnutls_supported_ec_point_formats_recv_params(gnutls_session_t session,
 		/* only sanity check here. We only support uncompressed points
 		 * and a client must support it thus nothing to check.
 		 */
-		if (_data_size < 1)
+		if (data_size < 1)
 			return
 			    gnutls_assert_val
 			    (GNUTLS_E_RECEIVED_ILLEGAL_EXTENSION);

@@ -22,8 +22,8 @@ AC_CONFIG_SRCDIR([src/encmain.c])
 #   - Increment when making new releases and major or minor was not changed since last release.
 #
 # Here is a somewhat sane guide to lib versioning: http://apr.apache.org/versioning.html
-ver_major=4
-ver_minor=0
+ver_major=6
+ver_minor=2
 ver_release=0
 
 # Prevents configure from adding a lot of defines to the CFLAGS
@@ -45,15 +45,35 @@ AC_SYS_LARGEFILE
 
 LT_INIT([win32-dll])
 
+AC_CANONICAL_HOST
+
+flag_gcc_on_mingw="false"
+case x"${host_os}" in
+  x"cygwin"*|x"mingw"*)
+    if test x"${CC}" = x"gcc" ; then
+      flag_gcc_on_mingw="true"
+    fi
+esac
+
+AX_CHECK_COMPILE_FLAG([-maltivec],[flag_altivec="true"])
 AX_CHECK_COMPILE_FLAG([-mavx2],   [flag_avx2="true"])
 AX_CHECK_COMPILE_FLAG([-msse4.1], [flag_sse4_1="true"])
 AX_CHECK_COMPILE_FLAG([-msse2],   [flag_sse2="true"])
+AX_CHECK_COMPILE_FLAG([-mbmi],    [flag_bmi="true"])
+AX_CHECK_COMPILE_FLAG([-mabm],    [flag_abm="true"])
+AX_CHECK_COMPILE_FLAG([-mpopcnt], [flag_popcnt="true"])
+AX_CHECK_COMPILE_FLAG([-mlzcnt],  [flag_lzcnt="true"])
+AX_CHECK_COMPILE_FLAG([-mbmi2],   [flag_bmi2="true"])
 
-AM_CONDITIONAL([HAVE_AVX2], [test x"$flag_avx2" = x"true"])
+# Do we need -mpopcnt and -mlzcnt, or -mabm to use POPCNT and LZCNT
+# instructions? Ask GCC and Clang, and they have different answers.
+AM_CONDITIONAL([HAVE_ALTIVEC], [test x"$flag_altivec" = x"true"])
+AM_CONDITIONAL([HAVE_AVX2_GCC], [test x"$flag_avx2" = x"true" -a x"$flag_bmi" = x"true" -a x"$flag_abm" = x"true" -a x"$flag_bmi2" = x"true" -a x"$flag_gcc_on_mingw" = x"false"])
+AM_CONDITIONAL([HAVE_AVX2_CLANG], [test x"$flag_avx2" = x"true" -a x"$flag_bmi" = x"true" -a x"$flag_popcnt" = x"true" -a x"$flag_lzcnt" = x"true" -a x"$flag_bmi2" = x"true" -a x"$flag_gcc_on_mingw" = x"false"])
 AM_CONDITIONAL([HAVE_SSE4_1], [test x"$flag_sse4_1" = x"true"])
 AM_CONDITIONAL([HAVE_SSE2], [test x"$flag_sse2" = x"true"])
 
-KVZ_CFLAGS="-Wall -Wtype-limits -Wvla -I$srcdir/src -I$srcdir/src/extras -ftree-vectorize -fvisibility=hidden"
+KVZ_CFLAGS="-Wall -Wextra -Wvla -Wno-sign-compare -Wno-unused-parameter -I$srcdir/src -I$srcdir/src/extras -ftree-vectorize -fvisibility=hidden"
 CFLAGS="$KVZ_CFLAGS $CFLAGS"
 
 AC_SEARCH_LIBS([log], [m c], [], [exit 1])
@@ -68,7 +88,10 @@ AS_IF([test "x$with_cryptopp" = "xyes"],
         [AC_DEFINE([KVZ_SEL_ENCRYPTION], [1], [With cryptopp])],
         [PKG_CHECK_MODULES([cryptopp], [libcrypto++],
             [AC_DEFINE([KVZ_SEL_ENCRYPTION], [1], [With cryptopp])],
-            [AC_MSG_ERROR([neither cryptopp nor libcrypto++ found with pkg-config])]
+            [PKG_CHECK_MODULES([cryptopp], [libcryptopp],
+                [AC_DEFINE([KVZ_SEL_ENCRYPTION], [1], [With cryptopp])],
+                [AC_MSG_ERROR([neither cryptopp, libcrypto++ nor libcryptopp found with pkg-config])]
+            )]
         )]
     )]
 )
@@ -122,10 +145,19 @@ AS_CASE([$host_os],
                ]
          )
         ],
+         [midipix*], [
+         AS_IF(
+               [test "x$BITS" = "x32"], [
+                ASFLAGS="$ASFLAGS -fwin32 -DPREFIX -DHAVE_ALIGNED_STACK=0"
+               ], [
+                ASFLAGS="$ASFLAGS -fwin64 -DHAVE_ALIGNED_STACK=1"
+               ]
+         )
+        ],
         [linux*|*kfreebsd*], [
          ASFLAGS="$ASFLAGS -f elf$BITS"
          LDFLAGS="$LDFLAGS -Wl,-z,noexecstack"
-         LIBS="$LIBS"
+         LIBS="$LIBS -lrt"
         ], [
          ASFLAGS="$ASFLAGS -f elf$BITS"
          LDFLAGS="$LDFLAGS -Wl,-z,noexecstack"

@@ -51,16 +51,18 @@ namespace WelsDec {
 
 
 
-void GetNeighborAvailMbType (PWelsNeighAvail pNeighAvail, PDqLayer pCurLayer);
-void WelsFillCacheNonZeroCount (PWelsNeighAvail pNeighAvail, uint8_t* pNonZeroCount, PDqLayer pCurLayer);
+void GetNeighborAvailMbType (PWelsNeighAvail pNeighAvail, PDqLayer pCurDqLayer);
+void WelsFillCacheNonZeroCount (PWelsNeighAvail pNeighAvail, uint8_t* pNonZeroCount, PDqLayer pCurDqLayer);
 void WelsFillCacheConstrain0IntraNxN (PWelsNeighAvail pNeighAvail, uint8_t* pNonZeroCount, int8_t* pIntraPredMode,
-                                      PDqLayer pCurLayer);
+                                      PDqLayer pCurDqLayer);
 void WelsFillCacheConstrain1IntraNxN (PWelsNeighAvail pNeighAvail, uint8_t* pNonZeroCount, int8_t* pIntraPredMode,
-                                      PDqLayer pCurLayer);
+                                      PDqLayer pCurDqLayer);
 void WelsFillCacheInterCabac (PWelsNeighAvail pNeighAvail, uint8_t* pNonZeroCount,
-                         int16_t iMvArray[LIST_A][30][MV_A], int16_t iMvdCache[LIST_A][30][MV_A], int8_t iRefIdxArray[LIST_A][30], PDqLayer pCurLayer);
+                              int16_t iMvArray[LIST_A][30][MV_A], int16_t iMvdCache[LIST_A][30][MV_A], int8_t iRefIdxArray[LIST_A][30],
+                              PDqLayer pCurDqLayer);
+void WelsFillDirectCacheCabac (PWelsNeighAvail pNeighAvail, int8_t iDirect[30], PDqLayer pCurDqLayer);
 void WelsFillCacheInter (PWelsNeighAvail pNeighAvail, uint8_t* pNonZeroCount,
-                         int16_t iMvArray[LIST_A][30][MV_A], int8_t iRefIdxArray[LIST_A][30], PDqLayer pCurLayer);
+                         int16_t iMvArray[LIST_A][30][MV_A], int8_t iRefIdxArray[LIST_A][30], PDqLayer pCurDqLayer);
 
 /*!
  * \brief   check iPredMode for intra16x16 eligible or not
@@ -109,18 +111,18 @@ int32_t WelsResidualBlockCavlc (SVlcTable* pVlcTable,
 
 // Transform8x8
 int32_t WelsResidualBlockCavlc8x8 (SVlcTable* pVlcTable,
-                                uint8_t* pNonZeroCountCache,
-                                PBitStringAux pBs,
-                                /*int16_t* coeff_level,*/
-                                int32_t iIndex,
-                                int32_t iMaxNumCoeff,
-                                const uint8_t* kpZigzagTable,
-                                int32_t iResidualProperty,
-                                /*short *tCoeffLevel,*/
-                                int16_t* pTCoeff,
-                                int32_t  iIdx4x4,
-                                uint8_t uiQp,
-                                PWelsDecoderContext pCtx);
+                                   uint8_t* pNonZeroCountCache,
+                                   PBitStringAux pBs,
+                                   /*int16_t* coeff_level,*/
+                                   int32_t iIndex,
+                                   int32_t iMaxNumCoeff,
+                                   const uint8_t* kpZigzagTable,
+                                   int32_t iResidualProperty,
+                                   /*short *tCoeffLevel,*/
+                                   int16_t* pTCoeff,
+                                   int32_t  iIdx4x4,
+                                   uint8_t uiQp,
+                                   PWelsDecoderContext pCtx);
 
 /*!
  * \brief   parsing inter info (including ref_index and pMvd)
@@ -129,6 +131,7 @@ int32_t WelsResidualBlockCavlc8x8 (SVlcTable* pVlcTable,
  */
 int32_t ParseInterInfo (PWelsDecoderContext pCtx, int16_t iMvArray[LIST_A][30][MV_A], int8_t iRefIdxArray[LIST_A][30],
                         PBitStringAux pBs);
-
+int32_t ParseInterBInfo (PWelsDecoderContext pCtx, int16_t iMvArray[LIST_A][30][MV_A],
+                         int8_t iRefIdxArray[LIST_A][30], PBitStringAux pBs);
 } // namespace WelsDec
 #endif//WELS_PARSE_MB_SYN_CAVLC_H__

@@ -85,7 +85,7 @@ int _gnutls13_recv_certificate_verify(gnutls_session_t session)
 	se = _gnutls_tls_aid_to_sign_entry(buf.data[0], buf.data[1], get_version(session));
 	if (se == NULL) {
 		_gnutls_handshake_log("Found unsupported signature (%d.%d)\n", (int)buf.data[0], (int)buf.data[1]);
-		ret = gnutls_assert_val(GNUTLS_E_UNSUPPORTED_SIGNATURE_ALGORITHM);
+		ret = gnutls_assert_val(GNUTLS_E_RECEIVED_ILLEGAL_PARAMETER);
 		goto cleanup;
 	}
 
@@ -188,7 +188,7 @@ int _gnutls13_send_certificate_verify(gnutls_session_t session, unsigned again)
 		}
 
 		if (server) {
-			algo = _gnutls_session_get_sign_algo(session, &apr_cert_list[0], apr_pkey, 0);
+			algo = _gnutls_session_get_sign_algo(session, &apr_cert_list[0], apr_pkey, 0, GNUTLS_KX_UNKNOWN);
 			if (algo == GNUTLS_SIGN_UNKNOWN)
 				return gnutls_assert_val(GNUTLS_E_INCOMPATIBLE_SIG_WITH_KEY);
 

@@ -292,6 +292,25 @@ wrap_padlock_hash_init(gnutls_digest_algorithm_t algo, void **_ctx)
 	return 0;
 }
 
+static void *
+wrap_padlock_hash_copy(const void *_ctx)
+{
+	struct padlock_hash_ctx *new_ctx;
+	const struct padlock_hash_ctx *ctx=_ctx;
+	ptrdiff_t off = (uint8_t *)ctx->ctx_ptr - (uint8_t *)(&ctx->ctx);
+
+	new_ctx = gnutls_malloc(sizeof(struct padlock_hash_ctx));
+	if (new_ctx == NULL) {
+		gnutls_assert();
+		return NULL;
+	}
+
+	memcpy(new_ctx, ctx, sizeof(*new_ctx));
+	new_ctx->ctx_ptr = (uint8_t *)&new_ctx->ctx + off;
+
+	return new_ctx;
+}
+
 static int
 wrap_padlock_hash_output(void *src_ctx, void *digest, size_t digestsize)
 {
@@ -312,6 +331,8 @@ int wrap_padlock_hash_fast(gnutls_digest_algorithm_t algo,
 			   const void *text, size_t text_size,
 			   void *digest)
 {
+	if (text_size == 0 && text == NULL)
+		text = digest;
 	if (algo == GNUTLS_DIG_SHA1) {
 		uint32_t iv[5] = {
 			0x67452301UL,
@@ -343,7 +364,6 @@ int wrap_padlock_hash_fast(gnutls_digest_algorithm_t algo,
 		wrap_padlock_hash_update(&ctx, text, text_size);
 
 		wrap_padlock_hash_output(&ctx, digest, ctx.length);
-		wrap_padlock_hash_deinit(&ctx);
 	}
 
 	return 0;
@@ -367,6 +387,7 @@ const gnutls_crypto_digest_st _gnutls_sha_padlock_nano = {
 	.init = wrap_padlock_hash_init,
 	.hash = wrap_padlock_hash_update,
 	.output = wrap_padlock_hash_output,
+	.copy = wrap_padlock_hash_copy,
 	.deinit = wrap_padlock_hash_deinit,
 	.fast = wrap_padlock_hash_fast,
 };

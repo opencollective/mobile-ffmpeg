@@ -59,11 +59,6 @@ gnutls_certificate_credentials_t xcred;
 
 unsigned int verbose = 0;
 
-extern int tls1_ok;
-extern int tls1_1_ok;
-extern int tls1_2_ok;
-extern int tls1_3_ok;
-extern int ssl3_ok;
 extern const char *ext_text;
 
 static void tls_log_func(int level, const char *str)
@@ -80,23 +75,33 @@ typedef struct {
 	const char *fail_str;
 	const char *unsure_str;
 	unsigned https_only;
+	unsigned fatal_failure;
 } TLS_TEST;
 
 static const TLS_TEST tls_tests[] = {
+	{"whether the server accepts default record size (512 bytes)",
+	 test_send_record, "yes", "no", "dunno"},
+	{"whether %ALLOW_SMALL_RECORDS is required",
+	 test_send_record_with_allow_small_records, "yes", "no", "dunno"},
 #ifdef ENABLE_SSL3
 	{"for SSL 3.0 (RFC6101) support", test_ssl3, "yes", "no", "dunno"},
+	{"for SSL 3.0 with extensions", test_ssl3_with_extensions, "yes", "no", "dunno"},
+	{"for SSL 3.0 with cipher suites not in SSL 3.0 spec",
+	 test_ssl3_unknown_ciphersuites, "yes", "no", "dunno"},
+#endif
 	/* The following tests will disable TLS 1.x if the server is
 	 * buggy */
-#endif
 	{"whether we need to disable TLS 1.2", test_tls_disable2, "no",
 	 "yes", "dunno"},
 	{"whether we need to disable TLS 1.1", test_tls_disable1, "no",
 	 "yes", "dunno"},
 	{"whether we need to disable TLS 1.0", test_tls_disable0, "no",
 	 "yes", "dunno"},
-	{"whether \%NO_EXTENSIONS is required", test_no_extensions, "no", "yes",
+	/* The following test will disable extensions if the server
+	 * is buggy */
+	{"whether %NO_EXTENSIONS is required", test_no_extensions, "no", "yes",
 	 "dunno"},
-	{"whether \%COMPAT is required", test_record_padding, "no", "yes",
+	{"whether %COMPAT is required", test_record_padding, "no", "yes",
 	 "dunno"},
 	{"for TLS 1.0 (RFC2246) support", test_tls1, "yes", "no", "dunno"},
 	{"for TLS 1.0 (RFC2246) support with TLS 1.0 record version", test_tls1_nossl3, "yes", "no", "dunno"},
@@ -106,6 +111,8 @@ static const TLS_TEST tls_tests[] = {
 	 "SSL 3.0"},
 	{"for TLS 1.2 (RFC5246) support", test_tls1_2, "yes", "no", "dunno"},
 	{"for TLS 1.3 (RFC8446) support", test_tls1_3, "yes", "no", "dunno"},
+	{"for known TLS or SSL protocols support", test_known_protocols, "yes", "no", "dunno", 0, 1},
+
 	{"TLS1.2 neg fallback from TLS 1.6 to", test_tls1_6_fallback, NULL,
 	 "failed (server requires fallback dance)", "dunno"},
 	{"for inappropriate fallback (RFC7507) support", test_rfc7507, "yes", "no", "dunno"},
@@ -145,6 +152,9 @@ static const TLS_TEST tls_tests[] = {
 	{"anonymous Diffie-Hellman group info", test_dhe_group, NULL, "N/A",
 	 "N/A"},
 #endif
+	{"for RSA key exchange support", test_rsa, "yes",
+	 "no",
+	 "dunno"},
 	{"for ephemeral Diffie-Hellman support", test_dhe, "yes", "no",
 	 "dunno"},
 	{"for RFC7919 Diffie-Hellman support", test_rfc7919, "yes", "no",
@@ -154,6 +164,9 @@ static const TLS_TEST tls_tests[] = {
 	{"for ephemeral EC Diffie-Hellman support", test_ecdhe, "yes",
 	 "no",
 	 "dunno"},
+#ifdef ENABLE_GOST
+	{"for VKO GOST-2012 (draft-smyshlyaev-tls12-gost-suites) support", test_vko_gost_12, "yes", "no", "dunno"},
+#endif
 	{"for curve SECP256r1 (RFC4492)", test_ecdhe_secp256r1, "yes", "no", "dunno"},
 	{"for curve SECP384r1 (RFC4492)", test_ecdhe_secp384r1, "yes", "no", "dunno"},
 	{"for curve SECP521r1 (RFC4492)", test_ecdhe_secp521r1, "yes", "no", "dunno"},
@@ -175,9 +188,16 @@ static const TLS_TEST tls_tests[] = {
 	 "dunno"},
 	{"for CHACHA20-POLY1305 cipher (RFC7905) support", test_chacha20, "yes", "no",
 	 "dunno"},
+#ifdef ENABLE_GOST
+	{"for GOST28147-CNT cipher (draft-smyshlyaev-tls12-gost-suites) support", test_gost_cnt, "yes", "no",
+	 "dunno"},
+#endif
 	{"for MD5 MAC support", test_md5, "yes", "no", "dunno"},
 	{"for SHA1 MAC support", test_sha, "yes", "no", "dunno"},
 	{"for SHA256 MAC support", test_sha256, "yes", "no", "dunno"},
+#ifdef ENABLE_GOST
+	{"for GOST28147-IMIT MAC (draft-smyshlyaev-tls12-gost-suites) support", test_gost_imit, "yes", "no", "dunno"},
+#endif
 	{"for max record size (RFC6066) support", test_max_record_size, "yes",
 	 "no", "dunno"},
 #ifdef ENABLE_OCSP
@@ -213,6 +233,7 @@ int main(int argc, char **argv)
 	int i;
 	char portname[6];
 	socket_st hd;
+	bool socket_opened = false;
 	char app_proto[32] = "";
 
 	cmd_parser(argc, argv);
@@ -266,66 +287,53 @@ int main(int argc, char **argv)
 
 	sockets_init();
 
-	i = 0;
-
 	printf("GnuTLS debug client %s\n", gnutls_check_version(NULL));
 
 	canonicalize_host(hostname, portname, sizeof(portname));
 	printf("Checking %s:%s\n", hostname, portname);
-	do {
 
-		if (tls_tests[i].test_name == NULL)
-			break;	/* finished */
+	for (i = 0;
+	     tls_tests[i].test_name != NULL;
+	     i++) {
 
-		/* if neither of SSL3 and TLSv1 are supported, exit
-		 */
-		if (i > 11 && tls1_2_ok == 0 && tls1_1_ok == 0 && tls1_ok == 0
-		    && ssl3_ok == 0 && tls1_3_ok == 0) {
-			fprintf(stderr,
-				"\nServer does not support any of SSL 3.0, TLS 1.0, 1.1, 1.2 and 1.3\n");
+		if (strcmp(app_proto, "https") != 0 && tls_tests[i].https_only != 0) {
+			continue;
+		}
+
+		if (!socket_opened) {
+			socket_open(&hd, hostname, portname, app_proto, SOCKET_FLAG_STARTTLS|SOCKET_FLAG_RAW, NULL, NULL);
+			hd.verbose = verbose;
+			socket_opened = true;
+		}
+
+		ret = tls_tests[i].func(hd.session);
+
+		if ((ret != TEST_IGNORE && ret != TEST_IGNORE2) || verbose) {
+			printf("%58s...", tls_tests[i].test_name);
+			fflush(stdout);
+		}
+
+		if (ret == TEST_SUCCEED) {
+			if (tls_tests[i].suc_str == NULL)
+				printf(" %s\n", ext_text);
+			else
+				printf(" %s\n", tls_tests[i].suc_str);
+		} else if (ret == TEST_FAILED)
+			printf(" %s\n", tls_tests[i].fail_str);
+		else if (ret == TEST_UNSURE)
+			printf(" %s\n", tls_tests[i].unsure_str);
+		else if ((ret == TEST_IGNORE || ret == TEST_IGNORE2) && verbose) {
+			printf(" skipped\n");
+		}
+
+		if (ret != TEST_IGNORE) {
+			socket_bye(&hd, 1);
+			socket_opened = false;
+		}
+
+		if (ret == TEST_FAILED && tls_tests[i].fatal_failure)
 			break;
-		}
-
-		socket_open(&hd, hostname, portname, app_proto, SOCKET_FLAG_STARTTLS|SOCKET_FLAG_RAW, NULL, NULL);
-		hd.verbose = verbose;
-
-		do {
-			if (strcmp(app_proto, "https") != 0 && tls_tests[i].https_only != 0) {
-				i++;
-				break;
-			}
-
-			ret = tls_tests[i].func(hd.session);
-
-			if (ret != TEST_IGNORE && ret != TEST_IGNORE2) {
-				printf("%58s...", tls_tests[i].test_name);
-				fflush(stdout);
-			}
-
-			if (ret == TEST_SUCCEED) {
-				if (tls_tests[i].suc_str == NULL)
-					printf(" %s\n", ext_text);
-				else
-					printf(" %s\n", tls_tests[i].suc_str);
-			} else if (ret == TEST_FAILED)
-				printf(" %s\n", tls_tests[i].fail_str);
-			else if (ret == TEST_UNSURE)
-				printf(" %s\n", tls_tests[i].unsure_str);
-			else if (ret == TEST_IGNORE) {
-				if (tls_tests[i+1].test_name)
-					i++;
-				else
-					break;
-			}
-		}
-		while (ret == TEST_IGNORE
-		       && tls_tests[i].test_name != NULL);
-
-		socket_bye(&hd, 1);
-
-		i++;
 	}
-	while (1);
 
 #ifdef ENABLE_SRP
 	gnutls_srp_free_client_credentials(srp_cred);

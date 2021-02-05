@@ -144,6 +144,10 @@ print_name(gnutls_buffer_st *str, const char *prefix, unsigned type, gnutls_datu
 		addf(str,  _("%sdirectoryName: %.*s\n"), prefix, name->size, NON_NULL(name->data));
 		break;
 
+	case GNUTLS_SAN_REGISTERED_ID:
+			addf(str,  _("%sRegistered ID: %.*s\n"), prefix, name->size, NON_NULL(name->data));
+			break;
+
 	case GNUTLS_SAN_OTHERNAME_XMPP:
 		addf(str,  _("%sXMPP Address: %.*s\n"), prefix, name->size, NON_NULL(name->data));
 		break;
@@ -369,7 +373,7 @@ static void print_aia(gnutls_buffer_st * str, const gnutls_datum_t *der)
 	gnutls_datum_t san = { NULL, 0 }, oid = {NULL, 0};
 	gnutls_x509_aia_t aia;
 	unsigned int san_type;
-	
+
 	err = gnutls_x509_aia_init(&aia);
 	if (err < 0)
 		return;
@@ -487,7 +491,7 @@ static void print_aki(gnutls_buffer_st * str, gnutls_datum_t *der)
 		     gnutls_strerror(err));
 		goto cleanup;
 	}
-	
+
 	adds(str, "\t\t\t");
 	_gnutls_buffer_hexprint(str, id.data, id.size);
 	adds(str, "\n");
@@ -620,7 +624,7 @@ print_key_purpose(gnutls_buffer_st * str, const char *prefix, gnutls_datum_t *de
 	char *p;
 	int err;
 	gnutls_x509_key_purposes_t purposes;
-	
+
 	err = gnutls_x509_key_purpose_init(&purposes);
 	if (err < 0) {
 		addf(str, "error: gnutls_x509_key_purpose_init: %s\n",
@@ -864,6 +868,95 @@ static void print_tlsfeatures(gnutls_buffer_st * str, const char *prefix, const 
 
 cleanup:
 	gnutls_x509_tlsfeatures_deinit(features);
+}
+
+static void print_subject_sign_tool(gnutls_buffer_st * str, const char *prefix, const gnutls_datum_t *der)
+{
+	int ret;
+	gnutls_datum_t tmp = {NULL, 0};
+
+	ret = _gnutls_x509_decode_string(ASN1_ETYPE_UTF8_STRING, der->data, der->size, &tmp, 0);
+	if (ret < 0) {
+		addf(str, _("%s\t\t\tASCII: "), prefix);
+		_gnutls_buffer_asciiprint(str, (char*)der->data, der->size);
+
+		addf(str, "\n");
+		addf(str, _("%s\t\t\tHexdump: "), prefix);
+		_gnutls_buffer_hexprint(str, (char*)der->data, der->size);
+		adds(str, "\n");
+
+		return;
+	}
+
+	addf(str, _("%s\t\t\t%.*s\n"), prefix, tmp.size, NON_NULL(tmp.data));
+	_gnutls_free_datum(&tmp);
+}
+
+static void print_issuer_sign_tool(gnutls_buffer_st * str, const char *prefix, const gnutls_datum_t *der)
+{
+	int ret, result;
+	ASN1_TYPE tmpasn = ASN1_TYPE_EMPTY;
+	char asn1_err[ASN1_MAX_ERROR_DESCRIPTION_SIZE] = "";
+	gnutls_datum_t tmp;
+
+	if ((result = asn1_create_element(_gnutls_get_gnutls_asn(), "GNUTLS.IssuerSignTool",
+				 &tmpasn)) != ASN1_SUCCESS) {
+		gnutls_assert();
+		goto hexdump;
+	}
+
+	if ((result = _asn1_strict_der_decode(&tmpasn, der->data, der->size, asn1_err)) != ASN1_SUCCESS) {
+		gnutls_assert();
+		_gnutls_debug_log("_asn1_strict_der_decode: %s\n", asn1_err);
+		goto hexdump;
+	}
+
+	ret = _gnutls_x509_read_value(tmpasn, "signTool", &tmp);
+	if (ret < 0) {
+		gnutls_assert();
+		goto hexdump;
+	}
+	addf(str, _("%s\t\t\tSignTool: %.*s\n"), prefix, tmp.size, NON_NULL(tmp.data));
+	_gnutls_free_datum(&tmp);
+
+	ret = _gnutls_x509_read_value(tmpasn, "cATool", &tmp);
+	if (ret < 0) {
+		gnutls_assert();
+		goto hexdump;
+	}
+	addf(str, _("%s\t\t\tCATool: %.*s\n"), prefix, tmp.size, NON_NULL(tmp.data));
+	_gnutls_free_datum(&tmp);
+
+	ret = _gnutls_x509_read_value(tmpasn, "signToolCert", &tmp);
+	if (ret < 0) {
+		gnutls_assert();
+		goto hexdump;
+	}
+	addf(str, _("%s\t\t\tSignToolCert: %.*s\n"), prefix, tmp.size, NON_NULL(tmp.data));
+	_gnutls_free_datum(&tmp);
+
+	ret = _gnutls_x509_read_value(tmpasn, "cAToolCert", &tmp);
+	if (ret < 0) {
+		gnutls_assert();
+		goto hexdump;
+	}
+	addf(str, _("%s\t\t\tCAToolCert: %.*s\n"), prefix, tmp.size, NON_NULL(tmp.data));
+	_gnutls_free_datum(&tmp);
+
+	asn1_delete_structure(&tmpasn);
+
+	return;
+
+hexdump:
+	asn1_delete_structure(&tmpasn);
+
+	addf(str, _("%s\t\t\tASCII: "), prefix);
+	_gnutls_buffer_asciiprint(str, (char*)der->data, der->size);
+
+	addf(str, "\n");
+	addf(str, _("%s\t\t\tHexdump: "), prefix);
+	_gnutls_buffer_hexprint(str, (char*)der->data, der->size);
+	adds(str, "\n");
 }
 
 struct ext_indexes_st {
@@ -1128,6 +1221,18 @@ static void print_extension(gnutls_buffer_st * str, const char *prefix,
 		print_tlsfeatures(str, prefix, der);
 
 		idx->tlsfeatures++;
+	} else if (strcmp(oid, "1.2.643.100.111") == 0) {
+		addf(str, _("%s\t\tSubject Signing Tool(%s):\n"),
+			 prefix,
+			 critical ? _("critical") : _("not critical"));
+
+		print_subject_sign_tool(str, prefix, der);
+	} else if (strcmp(oid, "1.2.643.100.112") == 0) {
+		addf(str, _("%s\t\tIssuer Signing Tool(%s):\n"),
+			 prefix,
+			 critical ? _("critical") : _("not critical"));
+
+		print_issuer_sign_tool(str, prefix, der);
 	} else {
 		addf(str, _("%s\t\tUnknown extension %s (%s):\n"),
 		     prefix, oid,
@@ -1177,12 +1282,12 @@ print_extensions(gnutls_buffer_st * str, const char *prefix, int type,
 			return;
 		}
 
+		if (err == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
+			break;
 		if (err < 0) {
-			if (err == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
-				break;
 			addf(str, "error: get_extension_info: %s\n",
 			     gnutls_strerror(err));
-			continue;
+			break;
 		}
 
 		if (i == 0)
@@ -1302,6 +1407,7 @@ print_pubkey(gnutls_buffer_st * str, const char *key_name,
 		break;
 
 	case GNUTLS_PK_EDDSA_ED25519:
+	case GNUTLS_PK_EDDSA_ED448:
 	case GNUTLS_PK_ECDSA:
 		{
 			gnutls_datum_t x, y;
@@ -1555,8 +1661,7 @@ print_crt_pubkey(gnutls_buffer_st * str, gnutls_x509_crt_t crt,
 	ret = 0;
 
  cleanup:
-	if (pubkey)
-		gnutls_pubkey_deinit(pubkey);
+	gnutls_pubkey_deinit(pubkey);
 
 	return ret;
 }
@@ -2099,9 +2204,7 @@ print_crl(gnutls_buffer_st * str, gnutls_x509_crl_t crl, int notsigned)
 	/* Version. */
 	{
 		int version = gnutls_x509_crl_get_version(crl);
-		if (version == GNUTLS_E_ASN1_ELEMENT_NOT_FOUND)
-			adds(str, _("\tVersion: 1 (default)\n"));
-		else if (version < 0)
+		if (version < 0)
 			addf(str, "error: get_version: %s\n",
 			     gnutls_strerror(version));
 		else
@@ -2186,14 +2289,13 @@ print_crl(gnutls_buffer_st * str, gnutls_x509_crl_t crl, int notsigned)
 								 oid,
 								 &sizeof_oid,
 								 &critical);
+			if (err == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
+				break;
 			if (err < 0) {
-				if (err ==
-				    GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
-					break;
 				addf(str,
 				     "error: get_extension_info: %s\n",
 				     gnutls_strerror(err));
-				continue;
+				break;
 			}
 
 			if (i == 0)
@@ -2557,14 +2659,13 @@ print_crq(gnutls_buffer_st * str, gnutls_x509_crq_t cert,
 			    gnutls_x509_crq_get_attribute_info(cert, i,
 							       oid,
 							       &sizeof_oid);
+			if (err == GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
+				break;
 			if (err < 0) {
-				if (err ==
-				    GNUTLS_E_REQUESTED_DATA_NOT_AVAILABLE)
-					break;
 				addf(str,
 				     "error: get_extension_info: %s\n",
 				     gnutls_strerror(err));
-				continue;
+				break;
 			}
 
 			if (i == 0)
@@ -2803,7 +2904,7 @@ gnutls_pubkey_print(gnutls_pubkey_t pubkey,
  * @format: Indicate the format to use
  * @out: Newly allocated datum with null terminated string.
  *
- * This function will pretty print X.509 certificate extensions, 
+ * This function will pretty print X.509 certificate extensions,
  * suitable for display to a human.
  *
  * The output @out needs to be deallocated using gnutls_free().

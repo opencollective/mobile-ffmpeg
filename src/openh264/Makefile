@@ -30,12 +30,13 @@ SHAREDLIB_DIR=$(PREFIX)/lib
 PROJECT_NAME=openh264
 MODULE_NAME=gmpopenh264
 GMP_API_BRANCH=Firefox39
+GTEST_VER=release-1.8.1
 CCASFLAGS=$(CFLAGS)
 STATIC_LDFLAGS=-lstdc++
 STRIP ?= strip
 
-SHAREDLIB_MAJORVERSION=4
-FULL_VERSION := 1.8.0
+SHAREDLIB_MAJORVERSION=6
+FULL_VERSION := 2.1.1
 
 ifeq (,$(wildcard $(SRC_PATH)gmp-api))
 HAVE_GMP_API=No
@@ -175,7 +176,8 @@ gmp-bootstrap:
 	cd gmp-api && git fetch origin && git checkout $(GMP_API_BRANCH)
 
 gtest-bootstrap:
-	if [ ! -d gtest ] ; then git clone https://github.com/google/googletest.git gtest ; fi
+	if [ ! -d gtest ] ; then git clone https://github.com/google/googletest.git gtest && \
+       cd gtest && git checkout -b $(GTEST_VER) $(GTEST_VER) ; fi
 
 ifeq ($(HAVE_GTEST),Yes)
 
@@ -283,10 +285,10 @@ endif
 endif
 
 $(PROJECT_NAME).pc: $(PROJECT_NAME).pc.in
-	@sed -e 's;@prefix@;$(PREFIX);' -e 's;@VERSION@;$(FULL_VERSION);' -e 's;@LIBS@;;' -e 's;@LIBS_PRIVATE@;$(STATIC_LDFLAGS);' < $< > $@
+	@sed -e 's;@prefix@;$(PREFIX);' -e 's;@libdir@;$(PREFIX)/lib;' -e 's;@VERSION@;$(FULL_VERSION);' -e 's;@LIBS@;;' -e 's;@LIBS_PRIVATE@;$(STATIC_LDFLAGS);' < $< > $@
 
 $(PROJECT_NAME)-static.pc: $(PROJECT_NAME).pc.in
-	@sed -e 's;@prefix@;$(PREFIX);' -e 's;@VERSION@;$(FULL_VERSION);' -e 's;@LIBS@;$(STATIC_LDFLAGS);' -e 's;@LIBS_PRIVATE@;;' < $< > $@
+	@sed -e 's;@prefix@;$(PREFIX);' -e 's;@libdir@;$(PREFIX)/lib;' -e 's;@VERSION@;$(FULL_VERSION);' -e 's;@LIBS@;$(STATIC_LDFLAGS);' -e 's;@LIBS_PRIVATE@;;' < $< > $@
 
 install-headers:
 	mkdir -p $(DESTDIR)$(PREFIX)/include/wels

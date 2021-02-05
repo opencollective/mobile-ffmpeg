@@ -1,6 +1,6 @@
 /.deps/
 /.libs/
-*.o
 *.lo
+*.o
+*.la
 /Makefile
-/libminitasn1.la

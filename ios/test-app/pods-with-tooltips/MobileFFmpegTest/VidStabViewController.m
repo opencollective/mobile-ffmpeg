@@ -58,7 +58,7 @@
     [Util applyVideoPlayerFrameStyle: self.videoPlayerFrame];
     [Util applyVideoPlayerFrameStyle: self.stabilizedVideoPlayerFrame];
     [Util applyHeaderStyle: self.header];
-    
+
     // TOOLTIP INIT
     RCEasyTipPreferences *preferences = [[RCEasyTipPreferences alloc] initWithDefaultPreferences];
     [Util applyTooltipStyle: preferences];
@@ -67,7 +67,7 @@
     preferences.animating.dismissDuration = VIDSTAB_TEST_TOOLTIP_DURATION;
     preferences.animating.dismissTransform = CGAffineTransformMakeTranslation(0, -15);
     preferences.animating.showInitialTransform = CGAffineTransformMakeTranslation(0, -15);
-    
+
     tooltip = [[RCEasyTipView alloc] initWithPreferences:preferences];
     tooltip.text = VIDSTAB_TEST_TOOLTIP_TEXT;
 
@@ -109,7 +109,7 @@
     [super didReceiveMemoryWarning];
 }
 
-- (void)logCallback: (int)level :(NSString*)message {
+- (void)logCallback:(long)executionId :(int)level :(NSString*)message {
     dispatch_async(dispatch_get_main_queue(), ^{
         NSLog(@"%@", message);
     });
@@ -307,7 +307,7 @@
 -loop 1 -i %@ \
 -loop 1 -i %@ \
 -f lavfi -i color=black:s=640x427 \
--filter_complex \
+-filter_complex \"\
 [0:v]setpts=PTS-STARTPTS,scale=w=\'if(gte(iw/ih,640/427),min(iw,640),-1)\':h=\'if(gte(iw/ih,640/427),-1,min(ih,427))\',scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=sar=1/1[stream1out];\
 [1:v]setpts=PTS-STARTPTS,scale=w=\'if(gte(iw/ih,640/427),min(iw,640),-1)\':h=\'if(gte(iw/ih,640/427),-1,min(ih,427))\',scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=sar=1/1[stream2out];\
 [2:v]setpts=PTS-STARTPTS,scale=w=\'if(gte(iw/ih,640/427),min(iw,640),-1)\':h=\'if(gte(iw/ih,640/427),-1,min(ih,427))\',scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=sar=1/1[stream3out];\
@@ -317,7 +317,7 @@
 [3:v][stream1overlaid]overlay=x=\'2*mod(n,4)\':y=\'2*mod(n,2)\',trim=duration=3[stream1shaking];\
 [3:v][stream2overlaid]overlay=x=\'2*mod(n,4)\':y=\'2*mod(n,2)\',trim=duration=3[stream2shaking];\
 [3:v][stream3overlaid]overlay=x=\'2*mod(n,4)\':y=\'2*mod(n,2)\',trim=duration=3[stream3shaking];\
-[stream1shaking][stream2shaking][stream3shaking]concat=n=3:v=1:a=0,scale=w=640:h=424,format=yuv420p[video] \
+[stream1shaking][stream2shaking][stream3shaking]concat=n=3:v=1:a=0,scale=w=640:h=424,format=yuv420p[video]\" \
 -map [video] -vsync 2 -async 1 -c:v mpeg4 -r 30 %@", image1, image2, image3, videoFile];
 }
 

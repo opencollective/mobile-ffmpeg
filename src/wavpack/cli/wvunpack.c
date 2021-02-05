@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////////
 //                           **** WAVPACK ****                            //
 //                  Hybrid Lossless Wavefile Compressor                   //
-//                Copyright (c) 1998 - 2017 David Bryant.                 //
+//                Copyright (c) 1998 - 2020 David Bryant.                 //
 //                          All Rights Reserved.                          //
 //      Distributed under the BSD Software License (see license.txt)      //
 ////////////////////////////////////////////////////////////////////////////
@@ -56,18 +56,46 @@
 #define rename(o,n) rename_utf8(o,n)
 #define fopen(f,m) fopen_utf8(f,m)
 #define strdup(x) _strdup(x)
+#define snprintf _snprintf
 #endif
 
 ///////////////////////////// local variable storage //////////////////////////
 
 static const char *sign_on = "\n"
 " WVUNPACK  Hybrid Lossless Audio Decompressor  %s Version %s\n"
-" Copyright (c) 1998 - 2017 David Bryant.  All Rights Reserved.\n\n";
+" Copyright (c) 1998 - 2020 David Bryant.  All Rights Reserved.\n\n";
 
 static const char *version_warning = "\n"
 " WARNING: WVUNPACK using libwavpack version %s, expected %s (see README)\n\n";
 
 static const char *usage =
+#if defined (_WIN32)
+" Usage:   WVUNPACK [-options] infile[.wv]|- [outfile[.ext]|outpath|-]\n"
+"           (default is restore original file, infile may contain wildcards: ?,*)\n\n"
+#else
+" Usage:   WVUNPACK [-options] infile[.wv]|- [...] [-o outfile[.ext]|outpath|-]\n"
+"           (default is restore original file, multiple input files allowed)\n\n"
+#endif
+" Formats: Microsoft RIFF:   'wav', force with -w or --wav, makes RF64 if > 4 GB\n"
+"          Sony Wave64:      'w64', force with --w64\n"
+"          Apple Core Audio: 'caf', force with --caf-be or --caf-le\n"
+"          Raw PCM or DSD:   'raw', force with -r or --raw, little-endian\n"
+"          Philips DSDIFF:   'dff', force with --dsdiff or --dff\n"
+"          Sony DSF:         'dsf', force with --dsf\n\n"
+" Options: -m  = calculate and display MD5 signature; verify if lossless\n"
+#ifdef _WIN32
+"          --pause = pause before exiting (if console window disappears)\n"
+#else
+"          -o FILENAME | PATH = specify output filename or path\n"
+#endif
+"          -q  = quiet (keep console output to a minimum)\n"
+"          -s  = display summary information only to stdout (no audio decode)\n"
+"          -ss = display super summary (including tags) to stdout (no decode)\n"
+"          -v  = verify source data only (no output file created)\n"
+"          --help = complete help\n\n"
+" Web:     Visit www.wavpack.com for latest version and info\n";
+
+static const char *help =
 #if defined (_WIN32)
 " Usage:   WVUNPACK [-options] infile[.wv]|- [outfile[.ext]|outpath|-]\n\n"
 "          Wildcard characters (?,*) may be included in the input filename.\n"
@@ -89,58 +117,61 @@ static const char *usage =
 "          Raw PCM or DSD:   'raw', force with -r or --raw, little-endian\n"
 "          Philips DSDIFF:   'dff', force with --dsdiff or --dff\n"
 "          Sony DSF:         'dsf', force with --dsf\n\n"
-" Options: -b  = blindly decode all stream blocks & ignore length info\n"
-"          -c  = extract cuesheet only to stdout (no audio decode)\n"
-"               (note: equivalent to -x \"cuesheet\")\n"
-"          -cc = extract cuesheet file (.cue) in addition to audio file\n"
-"               (note: equivalent to -xx \"cuesheet=%a.cue\")\n"
-"          --caf-be = force output to big-endian Core Audio (extension .caf)\n"
-"          --caf-le = force output to little-endian Core Audio (extension .caf)\n"
-"          -d  = delete source file if successful (use with caution!)\n"
-"          --dff or --dsdiff = force output to Philips DSDIFF\n"
-"                (DSD audio only, extension .dff)\n"
-"          --dsf = force output to Sony DSF (DSD audio only, extension .dsf)\n"
-"          -f[n]  = file info to stdout in machine-parsable format\n"
-"                (optional \"n\" = 1-10 for specific item, otherwise all)\n"
-"          --help = this help display\n"
-"          -i  = ignore .wvc file (forces hybrid lossy decompression)\n"
+" Options:\n"
+"    -b                    blindly decode all stream blocks & ignore length info\n"
+"    -c                    extract cuesheet only to stdout (no audio decode)\n"
+"                           (note: equivalent to -x \"cuesheet\")\n"
+"    -cc                   extract cuesheet file (.cue) in addition to audio file\n"
+"                           (note: equivalent to -xx \"cuesheet=%a.cue\")\n"
+"    --caf-be              force output to big-endian Core Audio (extension .caf)\n"
+"    --caf-le              force output to little-endian Core Audio (extension .caf)\n"
+"    -d                    delete source file if successful (use with caution!)\n"
+"    --dff or --dsdiff     force output to Philips DSDIFF (DSD audio only,\n"
+"                           extension .dff)\n"
+"    --dsf                 force output to Sony DSF (DSD audio only, extension .dsf)\n"
+"    -f[n]                 file info to stdout in machine-parsable format\n"
+"                           (optional \"n\" = 1-10 for specific item, otherwise all)\n"
+"    --help                this extended help display\n"
+"    -i                    ignore .wvc file (forces hybrid lossy decompression)\n"
 #if defined (_WIN32) || defined (__OS2__)
-"          -l  = run at low priority (for smoother multitasking)\n"
+"    -l                    run at low priority (for smoother multitasking)\n"
 #endif
-"          -m  = calculate and display MD5 signature; verify if lossless\n"
-"          -n  = no audio decoding (use with -xx to extract tags only)\n"
+"    -m                    calculate and display MD5 signature; verify if lossless\n"
+"    -n                    no audio decoding (use with -xx to extract tags only)\n"
 #ifdef _WIN32
-"          --no-utf8-convert = leave tag items in UTF-8 when extracting to files\n"
-"          --pause = pause before exiting (if console window disappears)\n"
+"    --no-utf8-convert     leave tag items in UTF-8 when extracting to files\n"
+"    --pause               pause before exiting (if console window disappears)\n"
 #else
-"          --no-utf8-convert = leave tag items in UTF-8 on extract or display\n"
-"          -o FILENAME | PATH = specify output filename or path\n"
+"    --no-utf8-convert     leave tag items in UTF-8 on extract or display\n"
+"    -o FILENAME | PATH    specify output filename or path\n"
 #endif
-"          -q  = quiet (keep console output to a minimum)\n"
-"          -r or --raw  = force raw audio decode (results in .raw extension)\n"
-"          -s  = display summary information only to stdout (no audio decode)\n"
-"          -ss = display super summary (including tags) to stdout (no decode)\n"
-"          --skip=[-][sample|hh:mm:ss.ss] = start decoding at specified sample/time\n"
-"              (specifying a '-' causes sample/time to be relative to end of file)\n"
-"          -t  = copy input file's time stamp to output file(s)\n"
-"          --until=[+|-][sample|hh:mm:ss.ss] = stop decoding at specified sample/time\n"
-"              (specifying a '+' causes sample/time to be relative to '--skip' point;\n"
-"               specifying a '-' causes sample/time to be relative to end of file)\n"
-"          -v  = verify source data only (no output file created)\n"
-"          --version = write the version to stdout\n"
-"          -w or --wav  = force output to Microsoft RIFF/RF64 (extension .wav)\n"
-"          --w64 = force output to Sony Wave64 format (extension .w64)\n"
-"          -x \"Field\" = extract specified tag field only to stdout (no audio decode)\n"
-"          -xx \"Field[=file]\" = extract specified tag field to file, optional\n"
-"              filename specification can inlude following replacement codes:\n"
-"                %a = audio output filename\n"
-"                %t = tag field name (note: comes from data for binary tags)\n"
-"                %e = extension from binary tag source file, or 'txt' for text tag\n"
-"          -y  = yes to overwrite warning (use with caution!)\n"
+"    -q                    quiet (keep console output to a minimum)\n"
+"    -r or --raw           force raw audio decode (results in .raw extension)\n"
+"    -s                    display summary info only to stdout (no audio decode)\n"
+"    -ss                   display super summary (with tags) to stdout (no decode)\n"
+"    --skip=[-][sample|hh:mm:ss.ss]\n"
+"                          start decoding at specified sample/time\n"
+"                           (specifying a '-' makes sample/time relative to end)\n"
+"    -t                    copy input file's time stamp to output file(s)\n"
+"    --until=[+|-][sample|hh:mm:ss.ss]\n"
+"                          stop decoding at specified sample/time\n"
+"                           (adding '+' makes sample/time relative to '--skip'\n"
+"                            point; adding '-' makes sample/time relative to end)\n"
+"    -v                    verify source data only (no output file created)\n"
+"    --version             write the version to stdout\n"
+"    -w or --wav           force output to Microsoft RIFF/RF64 (extension .wav)\n"
+"    --w64                 force output to Sony Wave64 format (extension .w64)\n"
+"    -x \"Field\"            extract specified tag field to stdout (no audio decode)\n"
+"    -xx \"Field[=file]\"    extract specified tag field to file, optional filename\n"
+"                           specification can include following replacement codes:\n"
+"                            %a = audio output filename\n"
+"                            %t = tag field name (comes from data for binary tags)\n"
+"                            %e = extension from binary tag source file, else 'txt'\n"
+"    -y                    yes to overwrite warning (use with caution!)\n"
 #if defined (_WIN32)
-"          -z  = don't set console title to indicate progress\n\n"
+"    -z                    don't set console title to indicate progress\n\n"
 #else
-"          -z1 = set console title to indicate progress\n\n"
+"    -z1                   set console title to indicate progress\n\n"
 #endif
 " Web:     Visit www.wavpack.com for latest version and info\n";
 
@@ -224,27 +255,23 @@ int main(int argc, char **argv)
     char selfname [MAX_PATH];
 
     if (GetModuleFileName (NULL, selfname, sizeof (selfname)) && filespec_name (selfname) &&
-        _strupr (filespec_name (selfname)) && strstr (filespec_name (selfname), "DEBUG")) {
-            char **argv_t = argv;
-            int argc_t = argc;
-
+        _strupr (filespec_name (selfname)) && strstr (filespec_name (selfname), "DEBUG"))
             debug_logging_mode = TRUE;
 
-            while (--argc_t)
-                error_line ("arg %d: %s", argc - argc_t, *++argv_t);
-    }
+    strcpy (selfname, *argv);
 #else
-    if (filespec_name (*argv))
-        if (strstr (filespec_name (*argv), "ebug") || strstr (filespec_name (*argv), "DEBUG")) {
-            char **argv_t = argv;
-            int argc_t = argc;
-
+    if (filespec_name (*argv) &&
+        (strstr (filespec_name (*argv), "ebug") || strstr (filespec_name (*argv), "DEBUG")))
             debug_logging_mode = TRUE;
-
-            while (--argc_t)
-                error_line ("arg %d: %s", argc - argc_t, *++argv_t);
-    }
 #endif
+
+    if (debug_logging_mode) {
+        char **argv_t = argv;
+        int argc_t = argc;
+
+        while (--argc_t)
+            error_line ("arg %d: %s", argc - argc_t, *++argv_t);
+    }
 
 #if defined (_WIN32)
     set_console_title = 1;      // on Windows, we default to messing with the console title
@@ -261,7 +288,7 @@ int main(int argc, char **argv)
                     break;
 
             if (!strcmp (long_option, "help")) {                        // --help
-                printf ("%s", usage);
+                printf ("%s", help);
                 return 0;
             }
             else if (!strcmp (long_option, "version")) {                // --version
@@ -1081,7 +1108,7 @@ static int unpack_file (char *infilename, char *outfilename, int add_extension)
     if (raw_decode) {                                   // case 1: user specified raw decode
         output_qmode = (input_qmode & QMODE_DSD_AUDIO) ? QMODE_DSD_MSB_FIRST : 0;
     }
-    else if (format_specified) {                        // case 2: user specfied an output format
+    else if (format_specified) {                        // case 2: user specified an output format
         switch (decode_format) {
             case WP_FORMAT_CAF:
                 output_qmode = QMODE_SIGNED_BYTES | (caf_be ? QMODE_BIG_ENDIAN : 0) | (input_qmode & QMODE_REORDERED_CHANS);
@@ -1523,7 +1550,7 @@ static int unpack_audio (WavpackContext *wpc, FILE *outfile, int qmode, unsigned
     MD5_CTX md5_context;
 
     if (md5_digest)
-        MD5Init (&md5_context);
+        MD5_Init (&md5_context);
 
     if (outfile) {
         if (outbuf_k)
@@ -1595,7 +1622,7 @@ static int unpack_audio (WavpackContext *wpc, FILE *outfile, int qmode, unsigned
 
         if (md5_digest && samples_unpacked) {
             store_samples (temp_buffer, temp_buffer, qmode, bps, samples_unpacked * num_channels);
-            MD5Update (&md5_context, (unsigned char *) temp_buffer, bps * samples_unpacked * num_channels);
+            MD5_Update (&md5_context, (unsigned char *) temp_buffer, bps * samples_unpacked * num_channels);
         }
 
         if (!samples_unpacked)
@@ -1633,7 +1660,7 @@ static int unpack_audio (WavpackContext *wpc, FILE *outfile, int qmode, unsigned
         free (new_channel_order);
 
     if (md5_digest)
-        MD5Final (md5_digest, &md5_context);
+        MD5_Final (md5_digest, &md5_context);
 
     free (temp_buffer);
 
@@ -1676,7 +1703,7 @@ static int unpack_dsd_audio (WavpackContext *wpc, FILE *outfile, int qmode, unsi
     MD5_CTX md5_context;
 
     if (md5_digest)
-        MD5Init (&md5_context);
+        MD5_Init (&md5_context);
 
     output_buffer_size = DSD_BLOCKSIZE * num_channels;
     output_buffer = malloc (output_buffer_size);
@@ -1743,7 +1770,7 @@ static int unpack_dsd_audio (WavpackContext *wpc, FILE *outfile, int qmode, unsi
             }
 
             if (md5_digest)
-                MD5Update (&md5_context, output_buffer, samples_unpacked * num_channels);
+                MD5_Update (&md5_context, output_buffer, samples_unpacked * num_channels);
 
             if (outfile && (!DoWriteFile (outfile, output_buffer, samples_unpacked * num_channels, &bcount) ||
                 bcount != samples_unpacked * num_channels)) {
@@ -1788,7 +1815,7 @@ static int unpack_dsd_audio (WavpackContext *wpc, FILE *outfile, int qmode, unsi
         free (new_channel_order);
 
     if (md5_digest)
-        MD5Final (md5_digest, &md5_context);
+        MD5_Final (md5_digest, &md5_context);
 
     free (temp_buffer);
 
@@ -2187,6 +2214,10 @@ static void dump_summary (WavpackContext *wpc, char *name, FILE *dst)
         strcpy (modes, "quad");
     else if (num_channels == 6 && channel_mask == 0x3f)
         strcpy (modes, "5.1 surround");
+    else if (num_channels == 6 && channel_mask == 0x60f)
+        strcpy (modes, "5.1 surround side");
+    else if (num_channels == 8 && channel_mask == 0x63f)
+        strcpy (modes, "7.1 surround");
     else if (num_channels == 8 && channel_mask == 0x6000003f)
         strcpy (modes, "5.1 + stereo");
     else {
@@ -2307,14 +2338,14 @@ static void dump_summary (WavpackContext *wpc, char *name, FILE *dst)
                 if (trailer_data [i] >= 0x20 && trailer_data [i] <= 0x7f)
                     trailer_name [i] = trailer_data [i];
 
-            fprintf (dst, "file wrapper:      %d + %d bytes (%s, %s)\n",
+            fprintf (dst, "file wrapper:      %u + %u bytes (%s, %s)\n",
                 header_bytes, trailer_bytes, header_name, trailer_name);
         }
         else if (header_bytes)
-            fprintf (dst, "file wrapper:      %d byte %s header\n",
+            fprintf (dst, "file wrapper:      %u byte %s header\n",
                 header_bytes, header_name);
         else if (trailer_bytes)
-            fprintf (dst, "file wrapper:      %d byte trailer only\n",
+            fprintf (dst, "file wrapper:      %u byte trailer only\n",
                 trailer_bytes);
         else
             fprintf (dst, "file wrapper:      none stored\n");
@@ -2383,15 +2414,15 @@ static void dump_summary (WavpackContext *wpc, char *name, FILE *dst)
                 char *value;
                 int i, j;
 
-                MD5Init (&md5_context);
+                MD5_Init (&md5_context);
                 value_len = WavpackGetBinaryTagItem (wpc, item, NULL, 0);
                 value = malloc (value_len);
                 value_len = WavpackGetBinaryTagItem (wpc, item, value, value_len);
 
                 for (i = 0; i < value_len; ++i)
                     if (!value [i]) {
-                        MD5Update (&md5_context, (unsigned char *) value + i + 1, value_len - i - 1);
-                        MD5Final (md5_result, &md5_context);
+                        MD5_Update (&md5_context, (unsigned char *) value + i + 1, value_len - i - 1);
+                        MD5_Final (md5_result, &md5_context);
                         for (j = 0; j < 16; ++j)
                             sprintf (md5_string + (j * 2), "%02x", md5_result [j]);
                         fprintf (dst, "    %d byte string >>%s<<\n", i, value);
@@ -2425,7 +2456,7 @@ static void dump_summary (WavpackContext *wpc, char *name, FILE *dst)
 // 6. number of samples (missing if unknown)
 // 7. md5sum (technically is hex, but not prefixed with "0x", might be missing)
 // 8. encoder version (basically this will always be 4 or 5, but there are some old files out there)
-// 9. encoding mode (in hex because it's a bitfield, always prefixed with "0x") 
+// 9. encoding mode (in hex because it's a bitfield, always prefixed with "0x")
 // 10. filename (if available)
 
 static void dump_file_item (WavpackContext *wpc, char *str, int item_id);
@@ -2524,18 +2555,20 @@ static void dump_file_item (WavpackContext *wpc, char *str, int item_id)
 // The "fname" parameter can optionally be set to a character array that will accept the suggested
 // filename. This is formed by the tag item name with the extension ".txt" for text fields; for
 // binary fields this is supplied by convention as a NULL terminated string at the beginning of the
-// data, so this is returned. The string should have 256 characters available.
+// data, so this is returned. The string should have 256 bytes available (for 255 chars + NULL).
 
 static int dump_tag_item_to_file (WavpackContext *wpc, const char *tag_item, FILE *dst, char *fname)
 {
+    const char *sanitized_tag_item = filespec_name ((char *) tag_item) ? filespec_name ((char *) tag_item) : tag_item;
+
     if (WavpackGetMode (wpc) & MODE_VALID_TAG) {
         if (WavpackGetTagItem (wpc, tag_item, NULL, 0)) {
             int value_len = WavpackGetTagItem (wpc, tag_item, NULL, 0);
             char *value;
 
             if (fname) {
-                strcpy (fname, tag_item);
-                strcat (fname, ".txt");
+                snprintf (fname, 256, "%s.txt", sanitized_tag_item);
+                fname [255] = 0;
             }
 
             if (!value_len || !dst)
@@ -2575,11 +2608,13 @@ static int dump_tag_item_to_file (WavpackContext *wpc, const char *tag_item, FIL
                     }
 
                     if (fname) {
-                        if (i < 256)
-                            strcpy (fname, value);
+                        char *sanitized_tag_value = filespec_name (value) ? filespec_name (value) : value;
+
+                        if (strlen (sanitized_tag_value) < 256)
+                            strcpy (fname, sanitized_tag_value);
                         else {
-                            strcpy (fname, tag_item);
-                            strcat (fname, ".bin");
+                            snprintf (fname, 256, "%s.bin", sanitized_tag_item);
+                            fname [255] = 0;
                         }
                     }
 

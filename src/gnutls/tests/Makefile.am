@@ -38,7 +38,7 @@ EXTRA_DIST = suppressions.valgrind eagain-common.h cert-common.h test-chains.h \
 	certs/ca-ecc.pem certs/cert-ecc384.pem certs/cert-ecc.pem certs/ecc256.pem \
 	certs/ecc521.pem certs/rsa-2432.pem x509cert-dir/ca.pem psk.passwd \
 	certs/rawpk_priv.pem certs/rawpk_pub.pem \
-	certs/ed25519.pem certs/cert-ed25519.pem \
+	certs/ed25519.pem certs/cert-ed25519.pem certs/rsa-512.pem \
 	system.prio pkcs11/softhsm.h pkcs11/pkcs11-pubkey-import.c gnutls-asan.supp \
 	rsa-md5-collision/README safe-renegotiation/README starttls-smtp.txt starttls-ftp.txt \
 	starttls-lmtp.txt starttls-pop3.txt starttls-xmpp.txt starttls-nntp.txt starttls-sieve.txt \
@@ -50,9 +50,9 @@ EXTRA_DIST = suppressions.valgrind eagain-common.h cert-common.h test-chains.h \
 	certs-interesting/README.md certs-interesting/cert1.der certs-interesting/cert1.der.err \
 	certs-interesting/cert2.der certs-interesting/cert2.der.err certs-interesting/cert3.der \
 	certs-interesting/cert3.der.err certs-interesting/cert4.der certs-interesting/cert5.der \
-	certs-interesting/cert6.der certs-interesting/cert6.der.err \
+	certs-interesting/cert5.der.err certs-interesting/cert6.der certs-interesting/cert6.der.err \
 	certs-interesting/cert7.der certs-interesting/cert8.der \
-	certs-interesting/cert9.der certs-interesting/cert5.der.err \
+	certs-interesting/cert9.der certs-interesting/cert10.der \
 	certs-interesting/cert3.der.err certs-interesting/cert4.der \
 	scripts/common.sh scripts/starttls-common.sh \
 	rng-op.c x509sign-verify-common.h common-key-tests.h \
@@ -63,14 +63,16 @@ EXTRA_DIST = suppressions.valgrind eagain-common.h cert-common.h test-chains.h \
 	ocsp-tests/certs/server_bad.template ocsp-tests/certs/ocsp-staple-unrelated.der ocsp-tests/suppressions.valgrind \
 	data/listings-DTLS1.0 data/listings-SSL3.0 data/listings-TLS1.0 data/listings-TLS1.1 \
 	data/listings-legacy1 data/listings-legacy2 data/listings-legacy3 data/listings-legacy4 \
-	data/listings-SSL3.0-TLS1.1 p11-kit-trust-data/Example_Root_CA.p11-kit server-kx-neg-common.c \
+	data/listings-old-SSL3.0-TLS1.1 data/listings-SSL3.0-TLS1.1 \
+	p11-kit-trust-data/Example_Root_CA.p11-kit server-kx-neg-common.c \
 	p11-kit-trust-data/Example_Root_CA.pem data/test1.cat data/test2.cat \
 	data/test1.cat.data data/test2.cat.data data/test1.cat.out data/test2.cat.out \
 	data/pkcs7-cat-ca.pem data/long.crl data/long.pem data/large-cert.pem \
 	testpkcs11.pkcs15 testpkcs11.softhsm testpkcs11.sc-hsm testpkcs11-certs/ca.crt testpkcs11-certs/ca-tmpl \
 	testpkcs11-certs/client.key testpkcs11-certs/server.crt testpkcs11-certs/server-tmpl \
 	testpkcs11-certs/ca.key testpkcs11-certs/client.crt testpkcs11-certs/client-tmpl testpkcs11-certs/server.key \
-	crt_type-neg-common.c
+	crt_type-neg-common.c \
+	system-override-default-priority-string.bad.config system-override-default-priority-string.none.config system-override-default-priority-string.only-tls13.config
 
 AM_CFLAGS = $(WARN_CFLAGS) $(WERROR_CFLAGS)
 AM_CPPFLAGS = \
@@ -104,7 +106,8 @@ noinst_LTLIBRARIES = libutils.la
 libutils_la_SOURCES = utils.h utils.c seccomp.c utils-adv.c
 libutils_la_LIBADD = ../lib/libgnutls.la
 
-indirect_tests = tls13/prf-early
+indirect_tests = tls13/prf-early system-override-hash system-override-sig
+
 ctests = tls13/supported_versions tls13/tls12-no-tls13-exts \
 	tls13/post-handshake-with-cert tls13/post-handshake-without-cert \
 	tls13/cookie tls13/key_share tls13/prf tls13/post-handshake-with-cert-ticket \
@@ -118,6 +121,8 @@ ctests += tls13/hello_retry_request
 ctests += tls13/psk-ext
 
 ctests += tls13/key_update
+
+ctests += tls13/key_update_multiple
 
 ctests += tls13/key_limits
 
@@ -150,14 +155,14 @@ ctests += mini-record-2 simple gnutls_hmac_fast set_pkcs12_cred cert certuniquei
 	 mini-termination mini-x509-cas mini-x509-2 pkcs12_simple tls-pthread \
 	 mini-emsgsize-dtls chainverify-unsorted mini-overhead tls12-ffdhe \
 	 mini-dtls-heartbeat mini-x509-callbacks key-openssl priorities priorities-groups	\
-	 gnutls_x509_privkey_import gnutls_x509_crt_list_import time \
+	 gnutls_x509_privkey_import gnutls_x509_crt_list_import time x509-server-verify \
 	 sign-verify-ext4 tls-neg-ext4-key resume-lifetime memset0 memset1 \
 	 mini-dtls-srtp rsa-encrypt-decrypt mini-loss-time gnutls-strcodes \
 	 mini-record mini-dtls-record handshake-timeout mini-record-range \
 	 cert-status fips-mode-pthread rsa-psk global-init sec-params sign-verify-data \
 	 fips-test fips-override-test mini-global-load name-constraints x509-extensions \
 	 long-session-id mini-x509-callbacks-intr mini-dtls-lowmtu set_x509_key_file-late \
-	 crlverify mini-dtls-discard init_fds mini-record-failure \
+	 crlverify mini-dtls-discard init_fds mini-record-failure openconnect-dtls12 \
 	 tls12-rehandshake-cert-2 custom-urls set_x509_key_mem set_x509_key_file \
 	 tls12-rehandshake-cert-auto tls12-rehandshake-set-prio \
 	 mini-chain-unsorted x509-verify-with-crl mini-dtls-mtu privkey-verify-broken \
@@ -170,18 +175,18 @@ ctests += mini-record-2 simple gnutls_hmac_fast set_pkcs12_cred cert certuniquei
 	 tls13-cert-key-exchange x509-cert-callback-ocsp gnutls_ocsp_resp_list_import2 \
 	 server-sign-md5-rep privkey-keygen mini-tls-nonblock no-signal pkcs7-gen dtls-etm \
 	 x509sign-verify-rsa x509sign-verify-ecdsa x509sign-verify-gost \
-	 mini-alignment oids atfork prf psk-file priority-init2 post-client-hello-change-prio \
-	 status-request status-request-ok status-request-missing sign-verify-ext \
-	 fallback-scsv pkcs8-key-decode urls dtls-rehandshake-cert \
+	 cipher-alignment oids atfork prf psk-file priority-init2 post-client-hello-change-prio \
+	 status-request status-request-ok rfc7633-missing sign-verify-ext \
+	 fallback-scsv pkcs8-key-decode urls dtls-rehandshake-cert rfc7633-ok \
 	 key-usage-rsa key-usage-ecdhe-rsa mini-session-verify-function auto-verify \
 	 record-timeouts mini-dtls-hello-verify-48 set-default-prio \
-	 tls12-anon-upgrade global-init-override tlsext-decoding rsa-psk-cb \
+	 tls12-anon-upgrade tlsext-decoding rsa-psk-cb gnutls-ids \
 	 rehandshake-switch-cert rehandshake-switch-cert-allow rehandshake-switch-cert-client \
 	 rehandshake-switch-cert-client-allow handshake-versions dtls-handshake-versions \
 	 dtls-max-record tls12-max-record alpn-server-prec ocsp-filename-memleak \
 	 dh-params rehandshake-ext-secret pcert-list session-export-funcs \
 	 handshake-false-start version-checks key-material-dtls key-material-set-dtls \
-	 system-prio-file name-constraints-merge crl-basic crq-basic \
+	 name-constraints-merge crl-basic crq-basic \
 	 send-client-cert custom-urls-override hex rehandshake-switch-psk-id \
 	 rehandshake-switch-srp-id base64 srpbase64 pkcs1-digest-info set_x509_key \
 	 set_x509_key_file_der set_x509_pkcs12_key crt_apis tls12-cert-key-exchange \
@@ -209,10 +214,22 @@ ctests += mini-record-2 simple gnutls_hmac_fast set_pkcs12_cred cert certuniquei
 	 tls13-server-kx-neg gnutls_ext_raw_parse_dtls key-export-pkcs8 \
 	 null_retrieve_function tls-record-size-limit tls-crt_type-neg \
 	 resume-with-stek-expiration resume-with-previous-stek rawpk-api \
-	 tls-record-size-limit-asym dh-compute ecdh-compute
+	 tls-record-size-limit-asym dh-compute ecdh-compute sign-verify-data-newapi \
+	 sign-verify-newapi sign-verify-deterministic iov aead-cipher-vec \
+	 tls13-without-timeout-func buffer status-request-revoked \
+	 set_x509_ocsp_multi_cli kdf-api keylog-func \
+	 dtls_hello_random_value tls_hello_random_value
 
 if HAVE_SECCOMP_TESTS
 ctests += dtls-with-seccomp tls-with-seccomp dtls-client-with-seccomp tls-client-with-seccomp
+endif
+
+if STRICT_DER_TIME
+ctests += strict-der
+endif
+
+if !DISABLE_SYSTEM_CONFIG
+ctests += system-prio-file
 endif
 
 if HAVE_CMOCKA
@@ -401,8 +418,8 @@ endif
 
 rsa_illegal_import_CPPFLAGS = $(AM_CPPFLAGS) $(NETTLE_CFLAGS)
 
-mini_alignment_CPPFLAGS = $(AM_CPPFLAGS) $(NETTLE_CFLAGS)
-mini_alignment_LDADD = $(LDADD) $(NETTLE_LIBS)
+cipher_alignment_CPPFLAGS = $(AM_CPPFLAGS) $(NETTLE_CFLAGS)
+cipher_alignment_LDADD = $(LDADD) $(NETTLE_LIBS)
 
 if ENABLE_OPENSSL
 ctests +=  openssl
@@ -410,7 +427,7 @@ openssl_LDADD = ../extra/libgnutls-openssl.la $(LDADD)
 endif
 
 if HAVE_FORK
-ctests += x509self x509dn anonself pskself dhepskself	\
+ctests += x509self x509dn anonself pskself pskself2 dhepskself	\
 	setcredcrash tls12-resume-x509 tls12-resume-psk tls12-resume-anon \
 	tls13-resume-x509 tls13-resume-psk tls13-early-data tls13-early-data-neg \
 	resume-with-record-size-limit
@@ -451,9 +468,18 @@ tls13_anti_replay_CPPFLAGS = $(AM_CPPFLAGS) \
 	-I$(top_builddir)/gl	\
 	$(NETTLE_CFLAGS)
 
+iov_CPPFLAGS = $(AM_CPPFLAGS) \
+	-I$(top_srcdir)/gl	\
+	-I$(top_builddir)/gl
+
+buffer_CPPFLAGS = $(AM_CPPFLAGS) \
+	-I$(top_srcdir)/gl	\
+	-I$(top_builddir)/gl
+
 if ENABLE_PKCS11
 if !WINDOWS
-ctests += tls13/post-handshake-with-cert-pkcs11 pkcs11/tls-neg-pkcs11-no-key
+ctests += tls13/post-handshake-with-cert-pkcs11 pkcs11/tls-neg-pkcs11-no-key \
+	global-init-override
 tls13_post_handshake_with_cert_pkcs11_DEPENDENCIES = libpkcs11mock2.la libutils.la
 tls13_post_handshake_with_cert_pkcs11_LDADD = $(LDADD) $(LIBDL)
 pkcs11_tls_neg_pkcs11_no_key_DEPENDENCIES = libpkcs11mock2.la libutils.la
@@ -483,9 +509,16 @@ dist_check_SCRIPTS += fastopen.sh pkgconfig.sh starttls.sh starttls-ftp.sh start
 	ocsp-tests/ocsp-test cipher-listings.sh sni-hostname.sh server-multi-keys.sh \
 	psktool.sh ocsp-tests/ocsp-load-chain gnutls-cli-save-data.sh gnutls-cli-debug.sh \
 	sni-resume.sh ocsp-tests/ocsptool cert-reencoding.sh pkcs7-cat.sh long-crl.sh \
-	serv-udp.sh logfile-option.sh gnutls-cli-resume.sh profile-tests.sh
+	serv-udp.sh logfile-option.sh gnutls-cli-resume.sh profile-tests.sh \
+	server-weak-keys.sh
 
-dist_check_SCRIPTS += gnutls-cli-self-signed.sh gnutls-cli-invalid-crl.sh
+if !DISABLE_SYSTEM_CONFIG
+dist_check_SCRIPTS += system-override-sig-hash.sh system-override-versions.sh system-override-invalid.sh \
+	system-override-curves.sh system-override-profiles.sh system-override-tls.sh \
+	system-override-kx.sh system-override-default-priority-string.sh
+endif
+
+dist_check_SCRIPTS += gnutls-cli-self-signed.sh gnutls-cli-invalid-crl.sh gnutls-cli-rawpk.sh
 
 if ENABLE_PKCS11
 dist_check_SCRIPTS += p11-kit-trust.sh testpkcs11.sh certtool-pkcs11.sh
@@ -493,7 +526,7 @@ dist_check_SCRIPTS += p11-kit-trust.sh testpkcs11.sh certtool-pkcs11.sh
 if HAVE_PKCS11_TRUST_STORE
 if P11KIT_0_23_11_API
 dist_check_SCRIPTS += p11-kit-load.sh
-indirect_tests += pkcs11/list-tokens
+indirect_tests += pkcs11/list-tokens pkcs11/list-objects
 endif
 endif
 
@@ -552,10 +585,11 @@ TESTS_ENVIRONMENT +=						\
 	PKCS12PASSWORD_2=""					\
 	PKCS12PATH=$(srcdir)/cert-tests/data/			\
 	X509CERTDIR=$(srcdir)/x509cert-dir/			\
-	GNUTLS_SYSTEM_PRIORITY_FILE=$(srcdir)/system.prio	\
+	GNUTLS_SYSTEM_PRIORITY_FILE=$(abs_top_srcdir)/tests/system.prio	\
 	PSK_FILE=$(srcdir)/psk.passwd				\
 	OPENSSL_ia32cap=0x00000000				\
 	EXEEXT=$(EXEEXT)					\
+	GNUTLS_TEST_SUITE_RUN=1					\
 	builddir="$(builddir)"					\
 	top_builddir="$(top_builddir)"				\
 	libdir="$(libdir)"					\

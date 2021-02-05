@@ -36,6 +36,8 @@ test_code_t test_dhe(gnutls_session_t state);
 test_code_t test_rfc7919(gnutls_session_t state);
 test_code_t test_dhe_group(gnutls_session_t state);
 test_code_t test_ssl3(gnutls_session_t state);
+test_code_t test_ssl3_with_extensions(gnutls_session_t state);
+test_code_t test_ssl3_unknown_ciphersuites(gnutls_session_t state);
 test_code_t test_aes(gnutls_session_t state);
 test_code_t test_camellia_cbc(gnutls_session_t state);
 test_code_t test_camellia_gcm(gnutls_session_t state);
@@ -53,6 +55,7 @@ test_code_t test_safe_renegotiation_scsv(gnutls_session_t state);
 test_code_t test_tls1_1(gnutls_session_t state);
 test_code_t test_tls1_2(gnutls_session_t state);
 test_code_t test_tls1_3(gnutls_session_t state);
+test_code_t test_known_protocols(gnutls_session_t state);
 test_code_t test_tls1_1_fallback(gnutls_session_t state);
 test_code_t test_tls1_6_fallback(gnutls_session_t state);
 test_code_t test_tls_disable0(gnutls_session_t state);
@@ -70,9 +73,12 @@ test_code_t test_server_cas(gnutls_session_t state);
 test_code_t test_session_resume2(gnutls_session_t state);
 test_code_t test_rsa_pms_version_check(gnutls_session_t session);
 test_code_t test_version_oob(gnutls_session_t session);
+test_code_t test_send_record(gnutls_session_t session);
+test_code_t test_send_record_with_allow_small_records(gnutls_session_t session);
 int _test_srp_username_callback(gnutls_session_t session,
 				char **username, char **password);
 
+test_code_t test_rsa(gnutls_session_t session);
 test_code_t test_ecdhe_x25519(gnutls_session_t session);
 test_code_t test_ecdhe_secp521r1(gnutls_session_t session);
 test_code_t test_ecdhe_secp384r1(gnutls_session_t session);
@@ -82,5 +88,11 @@ test_code_t test_aes_gcm(gnutls_session_t session);
 test_code_t test_aes_ccm(gnutls_session_t session);
 test_code_t test_aes_ccm_8(gnutls_session_t session);
 test_code_t test_sha256(gnutls_session_t session);
+
+#ifdef ENABLE_GOST
+test_code_t test_vko_gost_12(gnutls_session_t session);
+test_code_t test_gost_cnt(gnutls_session_t session);
+test_code_t test_gost_imit(gnutls_session_t session);
+#endif
 
 #endif /* GNUTLS_SRC_TESTS_H */

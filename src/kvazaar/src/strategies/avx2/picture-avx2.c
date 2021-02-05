@@ -21,17 +21,59 @@
 /*
  * \file
  */
-#include "strategies/avx2/picture-avx2.h"
+
+#include "global.h"
 
 #if COMPILE_INTEL_AVX2
-#include <immintrin.h>
-#include <string.h>
+#include "strategies/avx2/picture-avx2.h"
+#include "strategies/avx2/reg_sad_pow2_widths-avx2.h"
 
+#include <immintrin.h>
+#include <emmintrin.h>
+#include <mmintrin.h>
+#include <xmmintrin.h>
+#include <string.h>
 #include "kvazaar.h"
 #include "strategies/strategies-picture.h"
 #include "strategyselector.h"
 #include "strategies/generic/picture-generic.h"
 
+/**
+ * \brief Calculate Sum of Absolute Differences (SAD)
+ *
+ * Calculate Sum of Absolute Differences (SAD) between two rectangular regions
+ * located in arbitrary points in the picture.
+ *
+ * \param data1   Starting point of the first picture.
+ * \param data2   Starting point of the second picture.
+ * \param width   Width of the region for which SAD is calculated.
+ * \param height  Height of the region for which SAD is calculated.
+ * \param stride  Width of the pixel array.
+ *
+ * \returns Sum of Absolute Differences
+ */
+uint32_t kvz_reg_sad_avx2(const kvz_pixel * const data1, const kvz_pixel * const data2,
+                          const int width, const int height, const unsigned stride1, const unsigned stride2)
+{
+  if (width == 0)
+    return 0;
+  if (width == 4)
+    return reg_sad_w4(data1, data2, height, stride1, stride2);
+  if (width == 8)
+    return reg_sad_w8(data1, data2, height, stride1, stride2);
+  if (width == 12)
+    return reg_sad_w12(data1, data2, height, stride1, stride2);
+  if (width == 16)
+    return reg_sad_w16(data1, data2, height, stride1, stride2);
+  if (width == 24)
+    return reg_sad_w24(data1, data2, height, stride1, stride2);
+  if (width == 32)
+    return reg_sad_w32(data1, data2, height, stride1, stride2);
+  if (width == 64)
+    return reg_sad_w64(data1, data2, height, stride1, stride2);
+  else
+    return reg_sad_arbitrary(data1, data2, width, height, stride1, stride2);
+}
 
 /**
 * \brief Calculate SAD for 8x8 bytes in continuous memory.
@@ -484,13 +526,13 @@ static unsigned kvz_satd_4x4_subblock_8bit_avx2(const kvz_pixel * buf1,
 }
 
 static void kvz_satd_4x4_subblock_quad_avx2(const kvz_pixel *preds[4],
-                                       const int strides[4],
+                                       const int stride,
                                        const kvz_pixel *orig,
                                        const int orig_stride,
                                        unsigned costs[4])
 {
   // TODO: AVX2 implementation
-  kvz_satd_4x4_subblock_quad_generic(preds, strides, orig, orig_stride, costs);
+  kvz_satd_4x4_subblock_quad_generic(preds, stride, orig, orig_stride, costs);
 }
 
 static unsigned satd_8x8_subblock_8bit_avx2(const kvz_pixel * buf1, unsigned stride1, const kvz_pixel * buf2, unsigned stride2)
@@ -508,13 +550,13 @@ static unsigned satd_8x8_subblock_8bit_avx2(const kvz_pixel * buf1, unsigned str
 }
 
 static void satd_8x8_subblock_quad_avx2(const kvz_pixel **preds,
-  const int *strides,
+  const int stride,
   const kvz_pixel *orig,
   const int orig_stride,
   unsigned *costs)
 {
-  kvz_satd_8bit_8x8_general_dual_avx2(preds[0], strides[0], preds[1], strides[1], orig, orig_stride, &costs[0], &costs[1]);
-  kvz_satd_8bit_8x8_general_dual_avx2(preds[2], strides[2], preds[3], strides[3], orig, orig_stride, &costs[2], &costs[3]);
+  kvz_satd_8bit_8x8_general_dual_avx2(preds[0], stride, preds[1], stride, orig, orig_stride, &costs[0], &costs[1]);
+  kvz_satd_8bit_8x8_general_dual_avx2(preds[2], stride, preds[3], stride, orig, orig_stride, &costs[2], &costs[3]);
 }
 
 SATD_NxN(8bit_avx2,  8)
@@ -577,7 +619,7 @@ SATD_NXN_DUAL_AVX2(64)
   static void satd_any_size_ ## suffix ( \
       int width, int height, \
       const kvz_pixel **preds, \
-      const int *strides, \
+      const int stride, \
       const kvz_pixel *orig, \
       const int orig_stride, \
       unsigned num_modes, \
@@ -591,7 +633,7 @@ SATD_NXN_DUAL_AVX2(64)
     if (width % 8 != 0) { \
       /* Process the first column using 4x4 blocks. */ \
       for (int y = 0; y < height; y += 4) { \
-        kvz_satd_4x4_subblock_ ## suffix(preds, strides, orig, orig_stride, sums); \
+        kvz_satd_4x4_subblock_ ## suffix(preds, stride, orig, orig_stride, sums); \
             } \
       orig_ptr += 4; \
       for(int blk = 0; blk < num_parallel_blocks; ++blk){\
@@ -602,23 +644,23 @@ SATD_NXN_DUAL_AVX2(64)
     if (height % 8 != 0) { \
       /* Process the first row using 4x4 blocks. */ \
       for (int x = 0; x < width; x += 4 ) { \
-        kvz_satd_4x4_subblock_ ## suffix(pred_ptrs, strides, orig_ptr, orig_stride, sums); \
+        kvz_satd_4x4_subblock_ ## suffix(pred_ptrs, stride, orig_ptr, orig_stride, sums); \
             } \
       orig_ptr += 4 * orig_stride; \
       for(int blk = 0; blk < num_parallel_blocks; ++blk){\
-        pred_ptrs[blk] += 4 * strides[blk]; \
+        pred_ptrs[blk] += 4 * stride; \
             }\
       height -= 4; \
         } \
     /* The rest can now be processed with 8x8 blocks. */ \
     for (int y = 0; y < height; y += 8) { \
       orig_ptr = &orig[y * orig_stride]; \
-      pred_ptrs[0] = &preds[0][y * strides[0]]; \
-      pred_ptrs[1] = &preds[1][y * strides[1]]; \
-      pred_ptrs[2] = &preds[2][y * strides[2]]; \
-      pred_ptrs[3] = &preds[3][y * strides[3]]; \
+      pred_ptrs[0] = &preds[0][y * stride]; \
+      pred_ptrs[1] = &preds[1][y * stride]; \
+      pred_ptrs[2] = &preds[2][y * stride]; \
+      pred_ptrs[3] = &preds[3][y * stride]; \
       for (int x = 0; x < width; x += 8) { \
-        satd_8x8_subblock_ ## suffix(pred_ptrs, strides, orig_ptr, orig_stride, sums); \
+        satd_8x8_subblock_ ## suffix(pred_ptrs, stride, orig_ptr, orig_stride, sums); \
         orig_ptr += 8; \
         pred_ptrs[0] += 8; \
         pred_ptrs[1] += 8; \
@@ -714,8 +756,481 @@ static unsigned pixels_calc_ssd_avx2(const kvz_pixel *const ref, const kvz_pixel
   }
 }
 
-#endif //COMPILE_INTEL_AVX2
+static void inter_recon_bipred_avx2(const int hi_prec_luma_rec0,
+ const int hi_prec_luma_rec1,
+ const int hi_prec_chroma_rec0,
+ const int hi_prec_chroma_rec1,
+ const int height,
+ const int width,
+ const int ypos,
+ const int xpos,
+ const hi_prec_buf_t*high_precision_rec0,
+ const hi_prec_buf_t*high_precision_rec1,
+ lcu_t* lcu,
+ kvz_pixel* temp_lcu_y,
+ kvz_pixel* temp_lcu_u,
+ kvz_pixel* temp_lcu_v,
+bool predict_luma,
+bool predict_chroma)
+{
+  int y_in_lcu, x_in_lcu;
+  int shift = 15 - KVZ_BIT_DEPTH;
+  int offset = 1 << (shift - 1);
+  __m256i temp_epi8, temp_y_epi32, sample0_epi32, sample1_epi32, temp_epi16;
+  int32_t * pointer = 0;
+  __m256i offset_epi32 = _mm256_set1_epi32(offset);
 
+  for (int temp_y = 0; temp_y < height; ++temp_y) {
+
+   y_in_lcu = ((ypos + temp_y) & ((LCU_WIDTH)-1));
+
+   for (int temp_x = 0; temp_x < width; temp_x += 8) {
+    x_in_lcu = ((xpos + temp_x) & ((LCU_WIDTH)-1));
+
+    if (predict_luma) {
+      bool use_8_elements = ((temp_x + 8) <= width);
+
+      if (!use_8_elements) {
+        if (width < 4) {
+          // If width is smaller than 4 there's no need to use SIMD
+          for (int temp_i = 0; temp_i < width; ++temp_i) {
+            x_in_lcu = ((xpos + temp_i) & ((LCU_WIDTH)-1));
+
+            int sample0_y = (hi_prec_luma_rec0 ? high_precision_rec0->y[y_in_lcu * LCU_WIDTH + x_in_lcu] : (temp_lcu_y[y_in_lcu * LCU_WIDTH + x_in_lcu] << (14 - KVZ_BIT_DEPTH)));
+            int sample1_y = (hi_prec_luma_rec1 ? high_precision_rec1->y[y_in_lcu * LCU_WIDTH + x_in_lcu] : (lcu->rec.y[y_in_lcu * LCU_WIDTH + x_in_lcu] << (14 - KVZ_BIT_DEPTH)));
+
+            lcu->rec.y[y_in_lcu * LCU_WIDTH + x_in_lcu] = (kvz_pixel)kvz_fast_clip_32bit_to_pixel((sample0_y + sample1_y + offset) >> shift);
+          }
+        }
+
+        else {
+          // Load total of 4 elements from memory to vector
+          sample0_epi32 = hi_prec_luma_rec0 ? _mm256_cvtepi16_epi32(_mm_loadl_epi64((__m128i*) &(high_precision_rec0->y[y_in_lcu * LCU_WIDTH + x_in_lcu]))) :
+            _mm256_slli_epi32(_mm256_cvtepu8_epi32(_mm_cvtsi32_si128(*(int32_t*)&(temp_lcu_y[y_in_lcu * LCU_WIDTH + x_in_lcu]))), 14 - KVZ_BIT_DEPTH);
+
+
+          sample1_epi32 = hi_prec_luma_rec1 ? _mm256_cvtepi16_epi32(_mm_loadl_epi64((__m128i*) &(high_precision_rec1->y[y_in_lcu * LCU_WIDTH + x_in_lcu]))) :
+            _mm256_slli_epi32(_mm256_cvtepu8_epi32(_mm_cvtsi32_si128(*(int32_t*) &(lcu->rec.y[y_in_lcu * LCU_WIDTH + x_in_lcu]))), 14 - KVZ_BIT_DEPTH);
+
+
+          // (sample1 + sample2 + offset)>>shift 
+          temp_y_epi32 = _mm256_add_epi32(sample0_epi32, sample1_epi32);
+          temp_y_epi32 = _mm256_add_epi32(temp_y_epi32, offset_epi32);
+          temp_y_epi32 = _mm256_srai_epi32(temp_y_epi32, shift);
+
+          // Pack the bits from 32-bit to 8-bit
+          temp_epi16 = _mm256_packs_epi32(temp_y_epi32, temp_y_epi32);
+          temp_epi16 = _mm256_permute4x64_epi64(temp_epi16, _MM_SHUFFLE(3, 1, 2, 0));
+          temp_epi8 = _mm256_packus_epi16(temp_epi16, temp_epi16);
+
+          pointer = (int32_t*)&(lcu->rec.y[(y_in_lcu)* LCU_WIDTH + x_in_lcu]);
+          *pointer = _mm_cvtsi128_si32(_mm256_castsi256_si128(temp_epi8));
+
+
+
+          for (int temp_i = temp_x + 4; temp_i < width; ++temp_i) {
+            x_in_lcu = ((xpos + temp_i) & ((LCU_WIDTH)-1));
+
+            int16_t sample0_y = (hi_prec_luma_rec0 ? high_precision_rec0->y[y_in_lcu * LCU_WIDTH + x_in_lcu] : (temp_lcu_y[y_in_lcu * LCU_WIDTH + x_in_lcu] << (14 - KVZ_BIT_DEPTH)));
+            int16_t sample1_y = (hi_prec_luma_rec1 ? high_precision_rec1->y[y_in_lcu * LCU_WIDTH + x_in_lcu] : (lcu->rec.y[y_in_lcu * LCU_WIDTH + x_in_lcu] << (14 - KVZ_BIT_DEPTH)));
+
+            lcu->rec.y[y_in_lcu * LCU_WIDTH + x_in_lcu] = (kvz_pixel)kvz_fast_clip_32bit_to_pixel((sample0_y + sample1_y + offset) >> shift);
+          }
+
+        }
+      } else {
+        // Load total of 8 elements from memory to vector
+        sample0_epi32 = hi_prec_luma_rec0 ? _mm256_cvtepi16_epi32(_mm_loadu_si128((__m128i*) &(high_precision_rec0->y[y_in_lcu * LCU_WIDTH + x_in_lcu]))) :
+          _mm256_slli_epi32(_mm256_cvtepu8_epi32((_mm_loadl_epi64((__m128i*) &(temp_lcu_y[y_in_lcu * LCU_WIDTH + x_in_lcu])))), 14 - KVZ_BIT_DEPTH);
+
+        sample1_epi32 = hi_prec_luma_rec1 ? _mm256_cvtepi16_epi32(_mm_loadu_si128((__m128i*) &(high_precision_rec1->y[y_in_lcu * LCU_WIDTH + x_in_lcu]))) :
+          _mm256_slli_epi32(_mm256_cvtepu8_epi32((_mm_loadl_epi64((__m128i*) &(lcu->rec.y[y_in_lcu * LCU_WIDTH + x_in_lcu])))), 14 - KVZ_BIT_DEPTH);
+
+        // (sample1 + sample2 + offset)>>shift 
+        temp_y_epi32 = _mm256_add_epi32(sample0_epi32, sample1_epi32);
+        temp_y_epi32 = _mm256_add_epi32(temp_y_epi32, offset_epi32);
+        temp_y_epi32 = _mm256_srai_epi32(temp_y_epi32, shift);
+
+        // Pack the bits from 32-bit to 8-bit
+        temp_epi16 = _mm256_packs_epi32(temp_y_epi32, temp_y_epi32);
+        temp_epi16 = _mm256_permute4x64_epi64(temp_epi16, _MM_SHUFFLE(3, 1, 2, 0));
+        temp_epi8 = _mm256_packus_epi16(temp_epi16, temp_epi16);
+
+        // Store 64-bits from vector to memory
+        _mm_storel_epi64((__m128i*)&(lcu->rec.y[(y_in_lcu)* LCU_WIDTH + x_in_lcu]), _mm256_castsi256_si128(temp_epi8));
+      }
+    }
+   }
+  }
+  for (int temp_y = 0; temp_y < height >> 1; ++temp_y) {
+   int y_in_lcu = (((ypos >> 1) + temp_y) & (LCU_WIDTH_C - 1));
+   
+   for (int temp_x = 0; temp_x < width >> 1; temp_x += 8) {
+
+    int x_in_lcu = (((xpos >> 1) + temp_x) & (LCU_WIDTH_C - 1));
+
+    if (predict_chroma) {
+      if ((width >> 1) < 4) {
+        // If width>>1 is smaller than 4 there's no need to use SIMD
+
+        for (int temp_i = 0; temp_i < width >> 1; ++temp_i) {
+          int temp_x_in_lcu = (((xpos >> 1) + temp_i) & (LCU_WIDTH_C - 1));
+          int16_t sample0_u = (hi_prec_chroma_rec0 ? high_precision_rec0->u[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] : (temp_lcu_u[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] << (14 - KVZ_BIT_DEPTH)));
+          int16_t sample1_u = (hi_prec_chroma_rec1 ? high_precision_rec1->u[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] : (lcu->rec.u[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] << (14 - KVZ_BIT_DEPTH)));
+          lcu->rec.u[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] = (kvz_pixel)kvz_fast_clip_32bit_to_pixel((sample0_u + sample1_u + offset) >> shift);
+
+          int16_t sample0_v = (hi_prec_chroma_rec0 ? high_precision_rec0->v[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] : (temp_lcu_v[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] << (14 - KVZ_BIT_DEPTH)));
+          int16_t sample1_v = (hi_prec_chroma_rec1 ? high_precision_rec1->v[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] : (lcu->rec.v[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] << (14 - KVZ_BIT_DEPTH)));
+          lcu->rec.v[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] = (kvz_pixel)kvz_fast_clip_32bit_to_pixel((sample0_v + sample1_v + offset) >> shift);
+        }
+      }
+
+      else {
+
+        bool use_8_elements = ((temp_x + 8) <= (width >> 1));
+
+        __m256i temp_u_epi32, temp_v_epi32;
+
+        if (!use_8_elements) {
+          // Load 4 pixels to vector
+          sample0_epi32 = hi_prec_chroma_rec0 ? _mm256_cvtepi16_epi32(_mm_loadl_epi64((__m128i*) &(high_precision_rec0->u[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))) :
+            _mm256_slli_epi32(_mm256_cvtepu8_epi32(_mm_cvtsi32_si128(*(int32_t*) &(temp_lcu_u[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))), 14 - KVZ_BIT_DEPTH);
+
+          sample1_epi32 = hi_prec_chroma_rec1 ? _mm256_cvtepi16_epi32(_mm_loadl_epi64((__m128i*) &(high_precision_rec1->u[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))) :
+            _mm256_slli_epi32(_mm256_cvtepu8_epi32(_mm_cvtsi32_si128(*(int32_t*) &(lcu->rec.u[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))), 14 - KVZ_BIT_DEPTH);
+
+          // (sample1 + sample2 + offset)>>shift 
+          temp_u_epi32 = _mm256_add_epi32(sample0_epi32, sample1_epi32);
+          temp_u_epi32 = _mm256_add_epi32(temp_u_epi32, offset_epi32);
+          temp_u_epi32 = _mm256_srai_epi32(temp_u_epi32, shift);
+
+
+
+          sample0_epi32 = hi_prec_chroma_rec0 ? _mm256_cvtepi16_epi32(_mm_loadl_epi64((__m128i*) &(high_precision_rec0->v[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))) :
+            _mm256_slli_epi32(_mm256_cvtepu8_epi32(_mm_cvtsi32_si128(*(int32_t*) &(temp_lcu_v[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))), 14 - KVZ_BIT_DEPTH);
+
+          sample1_epi32 = hi_prec_chroma_rec1 ? _mm256_cvtepi16_epi32(_mm_loadl_epi64((__m128i*) &(high_precision_rec1->v[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))) :
+            _mm256_slli_epi32(_mm256_cvtepu8_epi32(_mm_cvtsi32_si128(*(int32_t*) &(lcu->rec.v[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))), 14 - KVZ_BIT_DEPTH);
+
+
+          // (sample1 + sample2 + offset)>>shift 
+          temp_v_epi32 = _mm256_add_epi32(sample0_epi32, sample1_epi32);
+          temp_v_epi32 = _mm256_add_epi32(temp_v_epi32, offset_epi32);
+          temp_v_epi32 = _mm256_srai_epi32(temp_v_epi32, shift);
+
+
+          temp_epi16 = _mm256_packs_epi32(temp_u_epi32, temp_u_epi32);
+          temp_epi16 = _mm256_permute4x64_epi64(temp_epi16, _MM_SHUFFLE(3, 1, 2, 0));
+          temp_epi8 = _mm256_packus_epi16(temp_epi16, temp_epi16);
+
+          pointer = (int32_t*)&(lcu->rec.u[(y_in_lcu)* LCU_WIDTH_C + x_in_lcu]);
+          *pointer = _mm_cvtsi128_si32(_mm256_castsi256_si128(temp_epi8));
+
+
+          temp_epi16 = _mm256_packs_epi32(temp_v_epi32, temp_v_epi32);
+          temp_epi16 = _mm256_permute4x64_epi64(temp_epi16, _MM_SHUFFLE(3, 1, 2, 0));
+          temp_epi8 = _mm256_packus_epi16(temp_epi16, temp_epi16);
+
+          pointer = (int32_t*)&(lcu->rec.v[(y_in_lcu)* LCU_WIDTH_C + x_in_lcu]);
+          *pointer = _mm_cvtsi128_si32(_mm256_castsi256_si128(temp_epi8));
+
+          for (int temp_i = 4; temp_i < width >> 1; ++temp_i) {
+
+            // Use only if width>>1 is not divideble by 4
+            int temp_x_in_lcu = (((xpos >> 1) + temp_i) & (LCU_WIDTH_C - 1));
+            int16_t sample0_u = (hi_prec_chroma_rec0 ? high_precision_rec0->u[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] : (temp_lcu_u[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] << (14 - KVZ_BIT_DEPTH)));
+            int16_t sample1_u = (hi_prec_chroma_rec1 ? high_precision_rec1->u[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] : (lcu->rec.u[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] << (14 - KVZ_BIT_DEPTH)));
+            lcu->rec.u[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] = (kvz_pixel)kvz_fast_clip_32bit_to_pixel((sample0_u + sample1_u + offset) >> shift);
+
+            int16_t sample0_v = (hi_prec_chroma_rec0 ? high_precision_rec0->v[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] : (temp_lcu_v[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] << (14 - KVZ_BIT_DEPTH)));
+            int16_t sample1_v = (hi_prec_chroma_rec1 ? high_precision_rec1->v[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] : (lcu->rec.v[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] << (14 - KVZ_BIT_DEPTH)));
+            lcu->rec.v[y_in_lcu * LCU_WIDTH_C + temp_x_in_lcu] = (kvz_pixel)kvz_fast_clip_32bit_to_pixel((sample0_v + sample1_v + offset) >> shift);
+          }
+        } else {
+          // Load 8 pixels to vector
+          sample0_epi32 = hi_prec_chroma_rec0 ? _mm256_cvtepi16_epi32(_mm_loadu_si128((__m128i*) &(high_precision_rec0->u[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))) :
+            _mm256_slli_epi32(_mm256_cvtepu8_epi32(_mm_loadl_epi64((__m128i*) &(temp_lcu_u[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))), 14 - KVZ_BIT_DEPTH);
+
+          sample1_epi32 = hi_prec_chroma_rec1 ? _mm256_cvtepi16_epi32(_mm_loadu_si128((__m128i*) &(high_precision_rec1->u[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))) :
+            _mm256_slli_epi32(_mm256_cvtepu8_epi32(_mm_loadl_epi64((__m128i*) &(lcu->rec.u[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))), 14 - KVZ_BIT_DEPTH);
+
+          // (sample1 + sample2 + offset)>>shift 
+          temp_u_epi32 = _mm256_add_epi32(sample0_epi32, sample1_epi32);
+          temp_u_epi32 = _mm256_add_epi32(temp_u_epi32, offset_epi32);
+          temp_u_epi32 = _mm256_srai_epi32(temp_u_epi32, shift);
+
+          sample0_epi32 = hi_prec_chroma_rec0 ? _mm256_cvtepi16_epi32(_mm_loadu_si128((__m128i*) &(high_precision_rec0->v[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))) :
+            _mm256_slli_epi32(_mm256_cvtepu8_epi32(_mm_loadl_epi64((__m128i*) &(temp_lcu_v[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))), 14 - KVZ_BIT_DEPTH);
+
+          sample1_epi32 = hi_prec_chroma_rec1 ? _mm256_cvtepi16_epi32(_mm_loadu_si128((__m128i*) &(high_precision_rec1->v[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))) :
+            _mm256_slli_epi32(_mm256_cvtepu8_epi32(_mm_loadl_epi64((__m128i*) &(lcu->rec.v[y_in_lcu * LCU_WIDTH_C + x_in_lcu]))), 14 - KVZ_BIT_DEPTH);
+
+
+          // (sample1 + sample2 + offset)>>shift 
+          temp_v_epi32 = _mm256_add_epi32(sample0_epi32, sample1_epi32);
+          temp_v_epi32 = _mm256_add_epi32(temp_v_epi32, offset_epi32);
+          temp_v_epi32 = _mm256_srai_epi32(temp_v_epi32, shift);
+
+          temp_epi16 = _mm256_packs_epi32(temp_u_epi32, temp_u_epi32);
+          temp_epi16 = _mm256_permute4x64_epi64(temp_epi16, _MM_SHUFFLE(3, 1, 2, 0));
+          temp_epi8 = _mm256_packus_epi16(temp_epi16, temp_epi16);
+
+          // Store 64-bit integer into memory
+          _mm_storel_epi64((__m128i*)&(lcu->rec.u[(y_in_lcu)* LCU_WIDTH_C + x_in_lcu]), _mm256_castsi256_si128(temp_epi8));
+
+          temp_epi16 = _mm256_packs_epi32(temp_v_epi32, temp_v_epi32);
+          temp_epi16 = _mm256_permute4x64_epi64(temp_epi16, _MM_SHUFFLE(3, 1, 2, 0));
+          temp_epi8 = _mm256_packus_epi16(temp_epi16, temp_epi16);
+
+          // Store 64-bit integer into memory
+          _mm_storel_epi64((__m128i*)&(lcu->rec.v[(y_in_lcu)* LCU_WIDTH_C + x_in_lcu]), _mm256_castsi256_si128(temp_epi8));
+        }
+      }
+    }
+   }
+  }
+}
+
+static optimized_sad_func_ptr_t get_optimized_sad_avx2(int32_t width)
+{
+  if (width == 0)
+    return reg_sad_w0;
+  if (width == 4)
+    return reg_sad_w4;
+  if (width == 8)
+    return reg_sad_w8;
+  if (width == 12)
+    return reg_sad_w12;
+  if (width == 16)
+    return reg_sad_w16;
+  if (width == 24)
+    return reg_sad_w24;
+  if (width == 32)
+    return reg_sad_w32;
+  if (width == 64)
+    return reg_sad_w64;
+  else
+    return NULL;
+}
+
+static uint32_t ver_sad_avx2(const kvz_pixel *pic_data, const kvz_pixel *ref_data,
+                             int32_t width, int32_t height, uint32_t stride)
+{
+  if (width == 0)
+    return 0;
+  if (width == 4)
+    return ver_sad_w4(pic_data, ref_data, height, stride);
+  if (width == 8)
+    return ver_sad_w8(pic_data, ref_data, height, stride);
+  if (width == 12)
+    return ver_sad_w12(pic_data, ref_data, height, stride);
+  if (width == 16)
+    return ver_sad_w16(pic_data, ref_data, height, stride);
+  else
+    return ver_sad_arbitrary(pic_data, ref_data, width, height, stride);
+}
+
+static uint32_t hor_sad_avx2(const kvz_pixel *pic_data, const kvz_pixel *ref_data,
+                             int32_t width, int32_t height, uint32_t pic_stride,
+                             uint32_t ref_stride, uint32_t left, uint32_t right)
+{
+  if (width == 4)
+    return hor_sad_sse41_w4(pic_data, ref_data, height,
+                            pic_stride, ref_stride, left, right);
+  if (width == 8)
+    return hor_sad_sse41_w8(pic_data, ref_data, height,
+                            pic_stride, ref_stride, left, right);
+  if (width == 16)
+    return hor_sad_sse41_w16(pic_data, ref_data, height,
+                             pic_stride, ref_stride, left, right);
+  if (width == 32)
+    return hor_sad_avx2_w32 (pic_data, ref_data, height,
+                             pic_stride, ref_stride, left, right);
+  else
+    return hor_sad_sse41_arbitrary(pic_data, ref_data, width, height,
+                                   pic_stride, ref_stride, left, right);
+}
+
+static double pixel_var_avx2_largebuf(const kvz_pixel *buf, const uint32_t len)
+{
+  const float len_f  = (float)len;
+  const __m256i zero = _mm256_setzero_si256();
+
+  int64_t sum;
+  size_t i;
+  __m256i sums = zero;
+  for (i = 0; i + 31 < len; i += 32) {
+    __m256i curr = _mm256_loadu_si256((const __m256i *)(buf + i));
+    __m256i curr_sum = _mm256_sad_epu8(curr, zero);
+            sums = _mm256_add_epi64(sums, curr_sum);
+  }
+  __m128i sum_lo = _mm256_castsi256_si128  (sums);
+  __m128i sum_hi = _mm256_extracti128_si256(sums,   1);
+  __m128i sum_3  = _mm_add_epi64           (sum_lo, sum_hi);
+  __m128i sum_4  = _mm_shuffle_epi32       (sum_3,  _MM_SHUFFLE(1, 0, 3, 2));
+  __m128i sum_5  = _mm_add_epi64           (sum_3,  sum_4);
+
+  _mm_storel_epi64((__m128i *)&sum, sum_5);
+
+  // Remaining len mod 32 pixels
+  for (; i < len; ++i) {
+    sum += buf[i];
+  }
+
+  float   mean_f = (float)sum / len_f;
+  __m256  mean   = _mm256_set1_ps(mean_f);
+  __m256  accum  = _mm256_setzero_ps();
+
+  for (i = 0; i + 31 < len; i += 32) {
+    __m128i curr0    = _mm_loadl_epi64((const __m128i *)(buf + i +  0));
+    __m128i curr1    = _mm_loadl_epi64((const __m128i *)(buf + i +  8));
+    __m128i curr2    = _mm_loadl_epi64((const __m128i *)(buf + i + 16));
+    __m128i curr3    = _mm_loadl_epi64((const __m128i *)(buf + i + 24));
+
+    __m256i curr0_32 = _mm256_cvtepu8_epi32(curr0);
+    __m256i curr1_32 = _mm256_cvtepu8_epi32(curr1);
+    __m256i curr2_32 = _mm256_cvtepu8_epi32(curr2);
+    __m256i curr3_32 = _mm256_cvtepu8_epi32(curr3);
+
+    __m256  curr0_f  = _mm256_cvtepi32_ps  (curr0_32);
+    __m256  curr1_f  = _mm256_cvtepi32_ps  (curr1_32);
+    __m256  curr2_f  = _mm256_cvtepi32_ps  (curr2_32);
+    __m256  curr3_f  = _mm256_cvtepi32_ps  (curr3_32);
+
+    __m256  curr0_sd = _mm256_sub_ps       (curr0_f,  mean);
+    __m256  curr1_sd = _mm256_sub_ps       (curr1_f,  mean);
+    __m256  curr2_sd = _mm256_sub_ps       (curr2_f,  mean);
+    __m256  curr3_sd = _mm256_sub_ps       (curr3_f,  mean);
+
+    __m256  curr0_v  = _mm256_mul_ps       (curr0_sd, curr0_sd);
+    __m256  curr1_v  = _mm256_mul_ps       (curr1_sd, curr1_sd);
+    __m256  curr2_v  = _mm256_mul_ps       (curr2_sd, curr2_sd);
+    __m256  curr3_v  = _mm256_mul_ps       (curr3_sd, curr3_sd);
+
+    __m256  curr01   = _mm256_add_ps       (curr0_v,  curr1_v);
+    __m256  curr23   = _mm256_add_ps       (curr2_v,  curr3_v);
+    __m256  curr     = _mm256_add_ps       (curr01,   curr23);
+            accum    = _mm256_add_ps       (accum,    curr);
+  }
+  __m256d accum_d  = _mm256_castps_pd     (accum);
+  __m256d accum2_d = _mm256_permute4x64_pd(accum_d, _MM_SHUFFLE(1, 0, 3, 2));
+  __m256  accum2   = _mm256_castpd_ps     (accum2_d);
+
+  __m256  accum3   = _mm256_add_ps        (accum,  accum2);
+  __m256  accum4   = _mm256_permute_ps    (accum3, _MM_SHUFFLE(1, 0, 3, 2));
+  __m256  accum5   = _mm256_add_ps        (accum3, accum4);
+  __m256  accum6   = _mm256_permute_ps    (accum5, _MM_SHUFFLE(2, 3, 0, 1));
+  __m256  accum7   = _mm256_add_ps        (accum5, accum6);
+
+  __m128  accum8   = _mm256_castps256_ps128(accum7);
+  float   var_sum  = _mm_cvtss_f32         (accum8);
+
+  // Remaining len mod 32 pixels
+  for (; i < len; ++i) {
+    float diff = buf[i] - mean_f;
+    var_sum += diff * diff;
+  }
+
+  return  var_sum / len_f;
+}
+
+#ifdef INACCURATE_VARIANCE_CALCULATION
+
+// Assumes that u is a power of two
+static INLINE uint32_t ilog2(uint32_t u)
+{
+  return _tzcnt_u32(u);
+}
+
+// A B C D | E F G H (8x32b)
+//        ==>
+// A+B C+D | E+F G+H (4x64b)
+static __m256i hsum_epi32_to_epi64(const __m256i v)
+{
+  const __m256i zero    = _mm256_setzero_si256();
+        __m256i v_shufd = _mm256_shuffle_epi32(v, _MM_SHUFFLE(3, 3, 1, 1));
+        __m256i sums_32 = _mm256_add_epi32    (v, v_shufd);
+        __m256i sums_64 = _mm256_blend_epi32  (sums_32, zero, 0xaa);
+  return        sums_64;
+}
+
+static double pixel_var_avx2(const kvz_pixel *buf, const uint32_t len)
+{
+  assert(sizeof(*buf) == 1);
+  assert((len & 31) == 0);
+
+  // Uses Q8.7 numbers to measure mean and deviation, so variances are Q16.14
+  const uint64_t sum_maxwid     = ilog2(len) + (8 * sizeof(*buf));
+  const __m128i normalize_sum   = _mm_cvtsi32_si128(sum_maxwid - 15); // Normalize mean to [0, 32767], so signed 16-bit subtraction never overflows
+  const __m128i debias_sum      = _mm_cvtsi32_si128(1 << (sum_maxwid - 16));
+  const float varsum_to_f       = 1.0f / (float)(1 << (14 + ilog2(len)));
+
+  const bool power_of_two = (len & (len - 1)) == 0;
+  if (sum_maxwid > 32 || sum_maxwid < 15 || !power_of_two) {
+    return pixel_var_avx2_largebuf(buf, len);
+  }
+
+  const __m256i zero      = _mm256_setzero_si256();
+  const __m256i himask_15 = _mm256_set1_epi16(0x7f00);
+
+  uint64_t vars;
+  size_t i;
+  __m256i sums = zero;
+  for (i = 0; i < len; i += 32) {
+    __m256i curr = _mm256_loadu_si256((const __m256i *)(buf + i));
+    __m256i curr_sum = _mm256_sad_epu8(curr, zero);
+            sums = _mm256_add_epi64(sums, curr_sum);
+  }
+  __m128i sum_lo = _mm256_castsi256_si128  (sums);
+  __m128i sum_hi = _mm256_extracti128_si256(sums,   1);
+  __m128i sum_3  = _mm_add_epi64           (sum_lo, sum_hi);
+  __m128i sum_4  = _mm_shuffle_epi32       (sum_3,  _MM_SHUFFLE(1, 0, 3, 2));
+  __m128i sum_5  = _mm_add_epi64           (sum_3,  sum_4);
+  __m128i sum_5n = _mm_srl_epi32           (sum_5,  normalize_sum);
+          sum_5n = _mm_add_epi32           (sum_5n, debias_sum);
+
+  __m256i sum_n  = _mm256_broadcastw_epi16 (sum_5n);
+
+  __m256i accum = zero;
+  for (i = 0; i < len; i += 32) {
+    __m256i curr = _mm256_loadu_si256((const __m256i *)(buf + i));
+
+    __m256i curr0    = _mm256_slli_epi16  (curr,  7);
+    __m256i curr1    = _mm256_srli_epi16  (curr,  1);
+            curr0    = _mm256_and_si256   (curr0, himask_15);
+            curr1    = _mm256_and_si256   (curr1, himask_15);
+
+    __m256i dev0     = _mm256_sub_epi16   (curr0, sum_n);
+    __m256i dev1     = _mm256_sub_epi16   (curr1, sum_n);
+
+    __m256i vars0    = _mm256_madd_epi16  (dev0,  dev0);
+    __m256i vars1    = _mm256_madd_epi16  (dev1,  dev1);
+
+    __m256i varsum   = _mm256_add_epi32   (vars0, vars1);
+            varsum   = hsum_epi32_to_epi64(varsum);
+            accum    = _mm256_add_epi64   (accum, varsum);
+  }
+  __m256i accum2 = _mm256_permute4x64_epi64(accum,  _MM_SHUFFLE(1, 0, 3, 2));
+  __m256i accum3 = _mm256_add_epi64        (accum,  accum2);
+  __m256i accum4 = _mm256_permute4x64_epi64(accum3, _MM_SHUFFLE(2, 3, 1, 0));
+  __m256i v_tot  = _mm256_add_epi64        (accum3, accum4);
+  __m128i vt128  = _mm256_castsi256_si128  (v_tot);
+
+  _mm_storel_epi64((__m128i *)&vars, vt128);
+
+  return (float)vars * varsum_to_f;
+}
+
+#else // INACCURATE_VARIANCE_CALCULATION
+
+static double pixel_var_avx2(const kvz_pixel *buf, const uint32_t len)
+{
+  return pixel_var_avx2_largebuf(buf, len);
+}
+
+#endif // !INACCURATE_VARIANCE_CALCULATION
+
+#endif //COMPILE_INTEL_AVX2
 
 int kvz_strategy_register_picture_avx2(void* opaque, uint8_t bitdepth)
 {
@@ -726,6 +1241,8 @@ int kvz_strategy_register_picture_avx2(void* opaque, uint8_t bitdepth)
   // simplest code to look at for anyone interested in doing more
   // optimizations, so it's worth it to keep this maintained.
   if (bitdepth == 8){
+
+    success &= kvz_strategyselector_register(opaque, "reg_sad", "avx2", 40, &kvz_reg_sad_avx2);
     success &= kvz_strategyselector_register(opaque, "sad_8x8", "avx2", 40, &sad_8bit_8x8_avx2);
     success &= kvz_strategyselector_register(opaque, "sad_16x16", "avx2", 40, &sad_8bit_16x16_avx2);
     success &= kvz_strategyselector_register(opaque, "sad_32x32", "avx2", 40, &sad_8bit_32x32_avx2);
@@ -746,6 +1263,13 @@ int kvz_strategy_register_picture_avx2(void* opaque, uint8_t bitdepth)
     success &= kvz_strategyselector_register(opaque, "satd_any_size_quad", "avx2", 40, &satd_any_size_quad_avx2);
 
     success &= kvz_strategyselector_register(opaque, "pixels_calc_ssd", "avx2", 40, &pixels_calc_ssd_avx2);
+    success &= kvz_strategyselector_register(opaque, "inter_recon_bipred", "avx2", 40, &inter_recon_bipred_avx2);
+    success &= kvz_strategyselector_register(opaque, "get_optimized_sad", "avx2", 40, &get_optimized_sad_avx2);
+    success &= kvz_strategyselector_register(opaque, "ver_sad", "avx2", 40, &ver_sad_avx2);
+    success &= kvz_strategyselector_register(opaque, "hor_sad", "avx2", 40, &hor_sad_avx2);
+
+    success &= kvz_strategyselector_register(opaque, "pixel_var", "avx2", 40, &pixel_var_avx2);
+
   }
 #endif
   return success;

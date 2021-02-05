@@ -24,6 +24,8 @@
 
 #include <limits.h>
 #include <string.h>
+
+#include "aom/aom_encoder.h"
 #include "aom/internal/aom_codec_internal.h"
 
 #define SAVE_STATUS(ctx, var) (ctx ? (ctx->err = var) : var)
@@ -166,12 +168,14 @@ aom_codec_err_t aom_codec_enc_config_default(aom_codec_iface_t *iface,
       }
     }
   }
-
   /* default values */
   if (cfg) {
-    cfg->cfg.ext_partition = 1;
+    memset(&cfg->encoder_cfg, 0, sizeof(cfg->encoder_cfg));
+    cfg->encoder_cfg.super_block_size = 0;  // Dynamic
+    cfg->encoder_cfg.max_partition_size = 128;
+    cfg->encoder_cfg.min_partition_size = 4;
+    cfg->encoder_cfg.disable_trellis_quant = 3;
   }
-
   return res;
 }
 
@@ -192,7 +196,9 @@ aom_codec_err_t aom_codec_enc_config_default(aom_codec_iface_t *iface,
 #define FLOATING_POINT_SET_EXCEPTIONS \
   const int float_excepts =           \
       feenableexcept(FE_DIVBYZERO | FE_UNDERFLOW | FE_OVERFLOW);
-#define FLOATING_POINT_RESTORE_EXCEPTIONS feenableexcept(float_excepts);
+#define FLOATING_POINT_RESTORE_EXCEPTIONS \
+  fedisableexcept(FE_ALL_EXCEPT);         \
+  feenableexcept(float_excepts);
 #else
 #define FLOATING_POINT_SET_EXCEPTIONS
 #define FLOATING_POINT_RESTORE_EXCEPTIONS

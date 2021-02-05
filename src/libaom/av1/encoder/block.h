@@ -16,6 +16,7 @@
 #include "av1/common/entropy.h"
 #include "av1/common/mvref_common.h"
 
+#include "av1/encoder/enc_enums.h"
 #if !CONFIG_REALTIME_ONLY
 #include "av1/encoder/partition_cnn_weights.h"
 #endif
@@ -28,6 +29,23 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// 1: use classic model 0: use count or saving stats
+#define USE_TPL_CLASSIC_MODEL 0
+#define MC_FLOW_BSIZE_1D 16
+#define MC_FLOW_NUM_PELS (MC_FLOW_BSIZE_1D * MC_FLOW_BSIZE_1D)
+#define MAX_MC_FLOW_BLK_IN_SB (MAX_SB_SIZE / MC_FLOW_BSIZE_1D)
+#define MAX_WINNER_MODE_COUNT_INTRA 3
+#define MAX_WINNER_MODE_COUNT_INTER 1
+typedef struct {
+  MB_MODE_INFO mbmi;
+  RD_STATS rd_cost;
+  int64_t rd;
+  int rate_y;
+  int rate_uv;
+  uint8_t color_index_map[64 * 64];
+  THR_MODES mode_index;
+} WinnerModeStats;
 
 typedef struct {
   unsigned int sse;
@@ -72,21 +90,32 @@ typedef struct {
 typedef struct {
   tran_low_t tcoeff[MAX_MB_PLANE][MAX_SB_SQUARE];
   uint16_t eobs[MAX_MB_PLANE][MAX_SB_SQUARE / (TX_SIZE_W_MIN * TX_SIZE_H_MIN)];
-  uint8_t txb_skip_ctx[MAX_MB_PLANE]
-                      [MAX_SB_SQUARE / (TX_SIZE_W_MIN * TX_SIZE_H_MIN)];
-  int dc_sign_ctx[MAX_MB_PLANE]
-                 [MAX_SB_SQUARE / (TX_SIZE_W_MIN * TX_SIZE_H_MIN)];
+  // Transform block entropy contexts.
+  // Bits 0~3: txb_skip_ctx; bits 4~5: dc_sign_ctx.
+  uint8_t entropy_ctx[MAX_MB_PLANE]
+                     [MAX_SB_SQUARE / (TX_SIZE_W_MIN * TX_SIZE_H_MIN)];
 } CB_COEFF_BUFFER;
 
 typedef struct {
   // TODO(angiebird): Reduce the buffer size according to sb_type
-  CANDIDATE_MV ref_mv_stack[MODE_CTX_REF_FRAMES][MAX_REF_MV_STACK_SIZE];
-  uint16_t weight[MODE_CTX_REF_FRAMES][MAX_REF_MV_STACK_SIZE];
+  CANDIDATE_MV ref_mv_stack[MODE_CTX_REF_FRAMES][USABLE_REF_MV_STACK_SIZE];
+  uint16_t weight[MODE_CTX_REF_FRAMES][USABLE_REF_MV_STACK_SIZE];
   int_mv global_mvs[REF_FRAMES];
-  int cb_offset;
   int16_t mode_context[MODE_CTX_REF_FRAMES];
   uint8_t ref_mv_count[MODE_CTX_REF_FRAMES];
 } MB_MODE_INFO_EXT;
+
+// Structure to store winner reference mode information at frame level. This
+// frame level information will be used during bitstream preparation stage.
+typedef struct {
+  CANDIDATE_MV ref_mv_stack[USABLE_REF_MV_STACK_SIZE];
+  uint16_t weight[USABLE_REF_MV_STACK_SIZE];
+  // TODO(Ravi/Remya): Reduce the buffer size of global_mvs
+  int_mv global_mvs[REF_FRAMES];
+  int cb_offset;
+  int16_t mode_context;
+  uint8_t ref_mv_count;
+} MB_MODE_INFO_EXT_FRAME;
 
 typedef struct {
   int col_min;
@@ -104,7 +133,7 @@ typedef struct {
   TX_SIZE tx_size;
   TX_SIZE inter_tx_size[INTER_TX_SIZE_BUF_LEN];
   uint8_t blk_skip[MAX_MIB_SIZE * MAX_MIB_SIZE];
-  TX_TYPE txk_type[TXK_TYPE_BUF_LEN];
+  uint8_t tx_type_map[MAX_MIB_SIZE * MAX_MIB_SIZE];
   RD_STATS rd_stats;
   uint32_t hash_value;
 } MB_RD_INFO;
@@ -149,6 +178,7 @@ typedef struct {
   RD_STATS rd_stats_y;
   RD_STATS rd_stats_uv;
   uint8_t blk_skip[MAX_MIB_SIZE * MAX_MIB_SIZE];
+  uint8_t tx_type_map[MAX_MIB_SIZE * MAX_MIB_SIZE];
   uint8_t skip;
   uint8_t disable_skip;
   uint8_t early_skipped;
@@ -157,29 +187,20 @@ typedef struct {
 // 4: NEAREST, NEW, NEAR, GLOBAL
 #define SINGLE_REF_MODES ((REF_FRAMES - 1) * 4)
 
-#define MAX_INTERP_FILTER_STATS 64
-typedef struct {
-  int_interpfilters filters;
-  int_mv mv[2];
-  int8_t ref_frames[2];
-  COMPOUND_TYPE comp_type;
-  int64_t rd;
-  int skip_txfm_sb;
-  int64_t skip_sse_sb;
-  unsigned int pred_sse;
-} INTERPOLATION_FILTER_STATS;
-
 #define MAX_COMP_RD_STATS 64
 typedef struct {
   int32_t rate[COMPOUND_TYPES];
   int64_t dist[COMPOUND_TYPES];
-  int64_t comp_model_rd[COMPOUND_TYPES];
+  int32_t model_rate[COMPOUND_TYPES];
+  int64_t model_dist[COMPOUND_TYPES];
+  int comp_rs2[COMPOUND_TYPES];
   int_mv mv[2];
   MV_REFERENCE_FRAME ref_frames[2];
   PREDICTION_MODE mode;
   int_interpfilters filter;
   int ref_mv_idx;
   int is_global[2];
+  INTERINTER_COMPOUND_DATA interinter_comp;
 } COMP_RD_STATS;
 
 // Struct for buffers used by compound_type_rd() function.
@@ -203,10 +224,6 @@ struct macroblock {
   // to select transform kernel.
   int rd_model;
 
-  // [comp_idx][saved stat_idx]
-  INTERPOLATION_FILTER_STATS interp_filter_stats[2][MAX_INTERP_FILTER_STATS];
-  int interp_filter_stats_idx[2];
-
   // prune_comp_search_by_single_result (3:MAX_REF_MV_SEARCH)
   SimpleRDState simple_rd_state[SINGLE_REF_MODES][3];
 
@@ -224,6 +241,11 @@ struct macroblock {
 
   MACROBLOCKD e_mbd;
   MB_MODE_INFO_EXT *mbmi_ext;
+  MB_MODE_INFO_EXT_FRAME *mbmi_ext_frame;
+  // Array of mode stats for winner mode processing
+  WinnerModeStats winner_mode_stats[AOMMAX(MAX_WINNER_MODE_COUNT_INTRA,
+                                           MAX_WINNER_MODE_COUNT_INTER)];
+  int winner_mode_count;
   int skip_block;
   int qindex;
 
@@ -257,8 +279,11 @@ struct macroblock {
   unsigned int simple_motion_pred_sse;
   unsigned int pred_sse[REF_FRAMES];
   int pred_mv_sad[REF_FRAMES];
+  int best_pred_mv_sad;
 
   int nmv_vec_cost[MV_JOINTS];
+  int nmv_costs[2][MV_VALS];
+  int nmv_costs_hp[2][MV_VALS];
   int *nmvcost[2];
   int *nmvcost_hp[2];
   int **mv_cost_stack;
@@ -299,8 +324,10 @@ struct macroblock {
   MvLimits mv_limits;
 
   uint8_t blk_skip[MAX_MIB_SIZE * MAX_MIB_SIZE];
+  uint8_t tx_type_map[MAX_MIB_SIZE * MAX_MIB_SIZE];
 
-  int skip;
+  // Force the coding block to skip transform and quantization.
+  int force_skip;
   int skip_chroma_rd;
   int skip_cost[SKIP_CONTEXTS][2];
 
@@ -396,6 +423,9 @@ struct macroblock {
   int must_find_valid_partition;
   int recalc_luma_mc_data;  // Flag to indicate recalculation of MC data during
                             // interpolation filter search
+  int prune_mode;
+  uint32_t tx_domain_dist_threshold;
+  int use_transform_domain_distortion;
   // The likelihood of an edge existing in the block (using partial Canny edge
   // detection). For reference, 556 is the value returned for a solid
   // vertical black/white edge.
@@ -411,13 +441,52 @@ struct macroblock {
 
   CB_COEFF_BUFFER *cb_coef_buff;
 
+  // Threshold used to decide the applicability of R-D optimization of
+  // quantized coeffs
+  uint32_t coeff_opt_dist_threshold;
+
 #if !CONFIG_REALTIME_ONLY
   int quad_tree_idx;
   int cnn_output_valid;
   float cnn_buffer[CNN_OUT_BUF_SIZE];
   float log_q;
 #endif
+  int thresh_freq_fact[BLOCK_SIZES_ALL][MAX_MODES];
+  uint8_t variance_low[105];
+  // Strong color activity detection. Used in REALTIME coding mode to enhance
+  // the visual quality at the boundary of moving color objects.
+  uint8_t color_sensitivity[2];
+  int nonrd_reduce_golden_mode_search;
+
+  // Used to control the tx size search evaluation for mode processing
+  // (normal/winner mode)
+  int tx_size_search_method;
+  // This tx_mode_search_type is used internally by the encoder, and is not
+  // written to the bitstream. It determines what kind of tx_mode should be
+  // searched. For example, we might set it to TX_MODE_LARGEST to find a good
+  // candidate, then use TX_MODE_SELECT on it
+  TX_MODE tx_mode_search_type;
+
+  // Used to control aggressiveness of skip flag prediction for mode processing
+  // (normal/winner mode)
+  unsigned int predict_skip_level;
+
+  // Copy out this SB's TPL block stats.
+  int valid_cost_b;
+  int64_t inter_cost_b[MAX_MC_FLOW_BLK_IN_SB * MAX_MC_FLOW_BLK_IN_SB];
+  int64_t intra_cost_b[MAX_MC_FLOW_BLK_IN_SB * MAX_MC_FLOW_BLK_IN_SB];
+  int cost_stride;
 };
+
+// Only consider full SB, MC_FLOW_BSIZE_1D = 16.
+static INLINE int tpl_blocks_in_sb(BLOCK_SIZE bsize) {
+  switch (bsize) {
+    case BLOCK_64X64: return 16;
+    case BLOCK_128X128: return 64;
+    default: assert(0);
+  }
+  return -1;
+}
 
 static INLINE int is_rect_tx_allowed_bsize(BLOCK_SIZE bsize) {
   static const char LUT[BLOCK_SIZES_ALL] = {

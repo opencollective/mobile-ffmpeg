@@ -19,6 +19,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include "libavutil/ffversion.h"
 #include "fftools_ffmpeg.h"
 #include "MobileFFmpegConfig.h"
 #include "ArchDetect.h"
@@ -39,6 +40,7 @@ typedef enum {
 @implementation CallbackData {
 
     CallbackType type;
+    long executionId;                   // execution id
 
     int logLevel;                       // log level
     NSString *logData;                  // log data
@@ -52,11 +54,11 @@ typedef enum {
     double statisticsSpeed;             // statistics speed
 }
 
- - (instancetype)initWithLogLevel:(int)newLogLevel data:(NSString*)newData {
+ - (instancetype)initWithId:(long)currentExecutionId logLevel:(int)newLogLevel data:(NSString*)newData {
     self = [super init];
     if (self) {
         type = LogType;
-
+        executionId = currentExecutionId;
         logLevel = newLogLevel;
         logData = newData;
     }
@@ -64,7 +66,8 @@ typedef enum {
     return self;
 }
 
- - (instancetype)initWithVideoFrameNumber: (int)videoFrameNumber
+ - (instancetype)initWithId:(long)currentExecutionId
+                            videoFrameNumber:(int)videoFrameNumber
                             fps:(float)videoFps
                             quality:(float)videoQuality
                             size:(int64_t)size
@@ -74,7 +77,7 @@ typedef enum {
     self = [super init];
     if (self) {
         type = StatisticsType;
-
+        executionId = currentExecutionId;
         statisticsFrameNumber = videoFrameNumber;
         statisticsFps = videoFps;
         statisticsQuality = videoQuality;
@@ -89,6 +92,10 @@ typedef enum {
 
 - (CallbackType)getType {
     return type;
+}
+
+- (long)getExecutionId {
+    return executionId;
 }
 
 - (int)getLogLevel {
@@ -129,6 +136,11 @@ typedef enum {
 
 @end
 
+/** Execution map variables */
+const int EXECUTION_MAP_SIZE = 1000;
+static volatile int executionMap[EXECUTION_MAP_SIZE];
+static NSRecursiveLock *executionMapLock;
+
 /** Redirection control variables */
 static int redirectionEnabled;
 static NSRecursiveLock *lock;
@@ -141,6 +153,13 @@ static id<LogDelegate> logDelegate = nil;
 /** Holds delegate defined to redirect statistics */
 static id<StatisticsDelegate> statisticsDelegate = nil;
 
+/** Common return code values */
+int const RETURN_CODE_SUCCESS = 0;
+int const RETURN_CODE_CANCEL = 255;
+
+int lastReturnCode;
+NSMutableString *lastCommandOutput;
+
 NSString *const LIB_NAME = @"mobile-ffmpeg";
 NSString *const MOBILE_FFMPEG_PIPE_PREFIX = @"mf_pipe_";
 
@@ -148,11 +167,20 @@ static Statistics *lastReceivedStatistics = nil;
 
 static NSMutableArray *supportedExternalLibraries;
 
-extern NSMutableString *lastCommandOutput;
-
-NSMutableString *systemCommandOutput;
-static int runningSystemCommand;
 static int lastCreatedPipeIndex;
+
+/** Fields that control the handling of SIGNALs */
+volatile int handleSIGQUIT = 1;
+volatile int handleSIGINT = 1;
+volatile int handleSIGTERM = 1;
+volatile int handleSIGXCPU = 1;
+volatile int handleSIGPIPE = 1;
+
+/** Holds the id of the current execution */
+__thread volatile long executionId = 0;
+
+/** Holds the default log level */
+int configuredLogLevel = AV_LOG_INFO;
 
 void callbackWait(int milliSeconds) {
     dispatch_semaphore_wait(semaphore, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(milliSeconds * NSEC_PER_MSEC)));
@@ -169,10 +197,11 @@ void callbackNotify() {
  * @param logData log data
  */
 void logCallbackDataAdd(int level, NSString *logData) {
-    CallbackData *callbackData = [[CallbackData alloc] initWithLogLevel:level data:logData];
+    CallbackData *callbackData = [[CallbackData alloc] initWithId:executionId logLevel:level data:logData];
 
     [lock lock];
     [callbackDataArray addObject:callbackData];
+    [lastCommandOutput appendString:logData];
     [lock unlock];
 
     callbackNotify();
@@ -182,13 +211,27 @@ void logCallbackDataAdd(int level, NSString *logData) {
  * Adds statistics data to the end of callback data list.
  */
 void statisticsCallbackDataAdd(int frameNumber, float fps, float quality, int64_t size, int time, double bitrate, double speed) {
-    CallbackData *callbackData = [[CallbackData alloc] initWithVideoFrameNumber:frameNumber fps:fps quality:quality size:size time:time bitrate:bitrate speed:speed];
+    CallbackData *callbackData = [[CallbackData alloc] initWithId:executionId videoFrameNumber:frameNumber fps:fps quality:quality size:size time:time bitrate:bitrate speed:speed];
 
     [lock lock];
     [callbackDataArray addObject:callbackData];
     [lock unlock];
 
     callbackNotify();
+}
+
+/**
+ * Adds an execution id to the execution map.
+ *
+ * @param id execution id
+ */
+void addExecution(long id) {
+    [executionMapLock lock];
+
+    int key = id % EXECUTION_MAP_SIZE;
+    executionMap[key] = 1;
+
+    [executionMapLock unlock];
 }
 
 /**
@@ -212,6 +255,41 @@ CallbackData *callbackDataRemove() {
 }
 
 /**
+ * Removes an execution id from the execution map.
+ *
+ * @param id execution id
+ */
+void removeExecution(long id) {
+    [executionMapLock lock];
+
+    int key = id % EXECUTION_MAP_SIZE;
+    executionMap[key] = 0;
+
+    [executionMapLock unlock];
+}
+
+/**
+ * Checks whether a cancel request for the given execution id exists in the execution map.
+ *
+ * @param id execution id
+ * @return 1 if exists, false otherwise
+ */
+int cancelRequested(long id) {
+    int found = 0;
+
+    [executionMapLock lock];
+
+    int key = id % EXECUTION_MAP_SIZE;
+    if (executionMap[key] == 0) {
+        found = 1;
+    }
+
+    [executionMapLock unlock];
+
+    return found;
+}
+
+/**
  * Callback function for FFmpeg logs.
  *
  * @param ptr pointer to AVClass struct
@@ -225,14 +303,18 @@ void mobileffmpeg_log_callback_function(void *ptr, int level, const char* format
     if (level >= 0) {
         level &= 0xff;
     }
-    int activeLogLevel = [MobileFFmpegConfig getLogLevel];
-    if ((activeLogLevel == AV_LOG_QUIET) || (level > activeLogLevel)) {
+    int activeLogLevel = av_log_get_level();
+
+    // AV_LOG_STDERR logs are always redirected
+    if ((activeLogLevel == AV_LOG_QUIET && level != AV_LOG_STDERR) || (level > activeLogLevel)) {
         return;
     }
 
     NSString *logData = [[NSString alloc] initWithFormat:[NSString stringWithCString:format encoding:NSUTF8StringEncoding] arguments:vargs];
 
-    logCallbackDataAdd(level, logData);
+    if (logData.length > 0) {
+        logCallbackDataAdd(level, logData);
+    }
 }
 
 /**
@@ -269,39 +351,35 @@ void callbackBlockFunction() {
                     if ([callbackData getType] == LogType) {
 
                         // LOG CALLBACK
-                        int activeLogLevel = [MobileFFmpegConfig getLogLevel];
+                        int activeLogLevel = av_log_get_level();
+                        int levelValue = [callbackData getLogLevel];
 
-                        if (runningSystemCommand == 1) {
-
-                            // REDIRECT SYSTEM OUTPUT
-                            if ((activeLogLevel != AV_LOG_QUIET) && ([callbackData getLogLevel] <= activeLogLevel)) {
-                                [systemCommandOutput appendString:[callbackData getLogData]];
-                            }
-                        } else if ((activeLogLevel == AV_LOG_QUIET) || ([callbackData getLogLevel] > activeLogLevel)) {
+                        if ((activeLogLevel == AV_LOG_QUIET && levelValue != AV_LOG_STDERR) || (levelValue > activeLogLevel)) {
 
                             // LOG NEITHER PRINTED NOR FORWARDED
                         } else {
-
-                            // ALWAYS REDIRECT COMMAND OUTPUT
-                            [lastCommandOutput appendString:[callbackData getLogData]];
-
                             if (logDelegate != nil) {
 
                                 // FORWARD LOG TO DELEGATE
-                                [logDelegate logCallback:[callbackData getLogLevel]:[callbackData getLogData]];
+                                [logDelegate logCallback:[callbackData getExecutionId]:[callbackData getLogLevel]:[callbackData getLogData]];
 
                             } else {
-
-                                // WRITE TO NSLOG
-                                NSLog(@"%@: %@", [MobileFFmpegConfig logLevelToString:[callbackData getLogLevel]], [callbackData getLogData]);
+                                switch (levelValue) {
+                                    case AV_LOG_QUIET:
+                                        // PRINT NO OUTPUT
+                                        break;
+                                    default:
+                                        // WRITE TO NSLOG
+                                        NSLog(@"%@: %@", [MobileFFmpegConfig logLevelToString:[callbackData getLogLevel]], [callbackData getLogData]);
+                                        break;
+                                }
                             }
-
                         }
 
                     } else {
 
                         // STATISTICS CALLBACK
-                        Statistics *newStatistics = [[Statistics alloc] initWithVideoFrameNumber:[callbackData getStatisticsFrameNumber] fps:[callbackData getStatisticsFps] quality:[callbackData getStatisticsQuality] size:[callbackData getStatisticsSize] time:[callbackData getStatisticsTime] bitrate:[callbackData getStatisticsBitrate] speed:[callbackData getStatisticsSpeed]];
+                        Statistics *newStatistics = [[Statistics alloc] initWithId:[callbackData getExecutionId] videoFrameNumber:[callbackData getStatisticsFrameNumber] fps:[callbackData getStatisticsFps] quality:[callbackData getStatisticsQuality] size:[callbackData getStatisticsSize] time:[callbackData getStatisticsTime] bitrate:[callbackData getStatisticsBitrate] speed:[callbackData getStatisticsSpeed]];
                         [lastReceivedStatistics update:newStatistics];
 
                         if (logDelegate != nil) {
@@ -328,53 +406,6 @@ void callbackBlockFunction() {
     activeLogLevel = av_log_get_level();
     if ((activeLogLevel != AV_LOG_QUIET) && (AV_LOG_DEBUG <= activeLogLevel)) {
         NSLog(@"Async callback block stopped.\n");
-    }
-}
-
-static int systemCommandOutputContainsPattern(NSArray *patternList) {
-    for (int i=0; i < [patternList count]; i++) {
-        NSString *pattern = [patternList objectAtIndex:i];
-        if ([systemCommandOutput rangeOfString:pattern].location != NSNotFound) {
-            return 1;
-        }
-    }
-
-    return 0;
-}
-
-/**
- * Executes system command. System command is not logged to output.
- *
- * @param arguments command arguments
- * @param commandOutputEndPatternList list of patterns which will indicate that operation has ended
- * @param successPattern success pattern
- * @param timeout execution timeout
- * @return return code
- */
-int mobileffmpeg_system_execute(NSArray *arguments, NSMutableArray *commandOutputEndPatternList, NSString *successPattern, long timeout) {
-    if (successPattern != nil) {
-        [commandOutputEndPatternList addObject:successPattern];
-    }
-    systemCommandOutput = [[NSMutableString alloc] init];
-    runningSystemCommand = 1;
-
-    int rc = [MobileFFmpeg executeWithArguments:arguments];
-
-    long totalWaitTime = 0;
-
-    while ((systemCommandOutputContainsPattern(commandOutputEndPatternList) == 0) && (totalWaitTime < timeout)) {
-        [NSThread sleepForTimeInterval:.02];
-        totalWaitTime += 20;
-    }
-
-    runningSystemCommand = 0;
-
-    [MobileFFmpeg cancel];
-
-    if (successPattern != nil && [systemCommandOutput containsString:successPattern]) {
-        return 0;
-    } else {
-        return rc;
     }
 }
 
@@ -411,30 +442,39 @@ int mobileffmpeg_system_execute(NSArray *arguments, NSMutableArray *commandOutpu
     [supportedExternalLibraries addObject:@"libwebp"];
     [supportedExternalLibraries addObject:@"libxml2"];
     [supportedExternalLibraries addObject:@"opencore-amr"];
+    [supportedExternalLibraries addObject:@"openh264"];
     [supportedExternalLibraries addObject:@"opus"];
+    [supportedExternalLibraries addObject:@"rubberband"];
+    [supportedExternalLibraries addObject:@"sdl2"];
     [supportedExternalLibraries addObject:@"shine"];
     [supportedExternalLibraries addObject:@"snappy"];
     [supportedExternalLibraries addObject:@"soxr"];
     [supportedExternalLibraries addObject:@"speex"];
+    [supportedExternalLibraries addObject:@"tesseract"];
     [supportedExternalLibraries addObject:@"twolame"];
     [supportedExternalLibraries addObject:@"wavpack"];
     [supportedExternalLibraries addObject:@"x264"];
     [supportedExternalLibraries addObject:@"x265"];
     [supportedExternalLibraries addObject:@"xvid"];
 
+    for(int i = 0; i<EXECUTION_MAP_SIZE; i++) {
+        executionMap[i] = 0;
+    }
+
     [ArchDetect class];
     [MobileFFmpeg class];
 
     redirectionEnabled = 0;
     lock = [[NSRecursiveLock alloc] init];
+    executionMapLock = [[NSRecursiveLock alloc] init];
     semaphore = dispatch_semaphore_create(0);
     lastReceivedStatistics = [[Statistics alloc] init];
     callbackDataArray = [[NSMutableArray alloc] init];
 
-    runningSystemCommand = 0;
     lastCreatedPipeIndex = 0;
 
-    systemCommandOutput = [[NSMutableString alloc] init];
+    lastReturnCode = 0;
+    lastCommandOutput = [[NSMutableString alloc] init];
 
     [MobileFFmpegConfig enableRedirection];
 }
@@ -487,7 +527,7 @@ int mobileffmpeg_system_execute(NSArray *arguments, NSMutableArray *commandOutpu
  * @return log level
  */
 + (int)getLogLevel {
-    return av_log_get_level();
+    return configuredLogLevel;
 }
 
 /**
@@ -495,8 +535,8 @@ int mobileffmpeg_system_execute(NSArray *arguments, NSMutableArray *commandOutpu
  *
  * @param level log level
  */
-+ (void)setLogLevel: (int)level {
-    av_log_set_level(level);
++ (void)setLogLevel:(int)level {
+    configuredLogLevel = level;
 }
 
 /**
@@ -505,8 +545,9 @@ int mobileffmpeg_system_execute(NSArray *arguments, NSMutableArray *commandOutpu
  * @param level value
  * @return string value
  */
-+ (NSString*)logLevelToString: (int)level {
++ (NSString*)logLevelToString:(int)level {
     switch (level) {
+        case AV_LOG_STDERR: return @"STDERR";
         case AV_LOG_TRACE: return @"TRACE";
         case AV_LOG_DEBUG: return @"DEBUG";
         case AV_LOG_VERBOSE: return @"VERBOSE";
@@ -525,7 +566,7 @@ int mobileffmpeg_system_execute(NSArray *arguments, NSMutableArray *commandOutpu
  *
  * @param newLogDelegate new log delegate
  */
-+ (void)setLogDelegate: (id<LogDelegate>)newLogDelegate {
++ (void)setLogDelegate:(id<LogDelegate>)newLogDelegate {
     logDelegate = newLogDelegate;
 }
 
@@ -534,7 +575,7 @@ int mobileffmpeg_system_execute(NSArray *arguments, NSMutableArray *commandOutpu
  *
  * @param newStatisticsDelegate statistics delegate
  */
-+ (void)setStatisticsDelegate: (id<StatisticsDelegate>)newStatisticsDelegate {
++ (void)setStatisticsDelegate:(id<StatisticsDelegate>)newStatisticsDelegate {
     statisticsDelegate = newStatisticsDelegate;
 }
 
@@ -559,7 +600,7 @@ int mobileffmpeg_system_execute(NSArray *arguments, NSMutableArray *commandOutpu
  *
  * @param path directory which contains fontconfig configuration (fonts.conf)
  */
-+ (void)setFontconfigConfigurationPath: (NSString*)path {
++ (void)setFontconfigConfigurationPath:(NSString*)path {
     if (path != nil) {
         setenv("FONTCONFIG_PATH", [path UTF8String], true);
     }
@@ -574,7 +615,7 @@ int mobileffmpeg_system_execute(NSArray *arguments, NSMutableArray *commandOutpu
  * @param fontDirectoryPath directory which contains fonts (.ttf and .otf files)
  * @param fontNameMapping custom font name mappings, useful to access your fonts with more friendly names
  */
-+ (void)setFontDirectory: (NSString*)fontDirectoryPath with:(NSDictionary*)fontNameMapping {
++ (void)setFontDirectory:(NSString*)fontDirectoryPath with:(NSDictionary*)fontNameMapping {
     NSError *error = nil;
     BOOL isDirectory = YES;
     BOOL isFile = NO;
@@ -901,11 +942,87 @@ int mobileffmpeg_system_execute(NSArray *arguments, NSMutableArray *commandOutpu
  *
  * @param ffmpegPipePath full path of ffmpeg pipe
  */
-+ (void)closeFFmpegPipe: (NSString*)ffmpegPipePath {
++ (void)closeFFmpegPipe:(NSString*)ffmpegPipePath {
     NSFileManager *fileManager = [NSFileManager defaultManager];
 
     if ([fileManager fileExistsAtPath:ffmpegPipePath]){
         [fileManager removeItemAtPath:ffmpegPipePath error:NULL];
+    }
+}
+
+/**
+ * Returns FFmpeg version bundled within the library.
+ *
+ * @return FFmpeg version string
+ */
++ (NSString*)getFFmpegVersion {
+    return [NSString stringWithUTF8String:FFMPEG_VERSION];
+}
+
+/**
+ * Returns MobileFFmpeg library version.
+ *
+ * @return MobileFFmpeg version string
+ */
++ (NSString*)getVersion {
+    if ([ArchDetect isLTSBuild] == 1) {
+        return [NSString stringWithFormat:@"%@-lts", MOBILE_FFMPEG_VERSION];
+    } else {
+        return MOBILE_FFMPEG_VERSION;
+    }
+}
+
+/**
+ * Returns MobileFFmpeg library build date.
+ *
+ * @return MobileFFmpeg library build date
+ */
++ (NSString*)getBuildDate {
+    char buildDate[10];
+    sprintf(buildDate, "%d", MOBILE_FFMPEG_BUILD_DATE);
+    return [NSString stringWithUTF8String:buildDate];
+}
+
+/**
+ * Returns return code of last executed command.
+ *
+ * @return return code of last executed command
+ */
++ (int)getLastReturnCode {
+    return lastReturnCode;
+}
+
+/**
+ * Returns log output of last executed single FFmpeg/FFprobe command.
+ *
+ * This method does not support executing multiple concurrent commands. If you execute
+ * multiple commands at the same time, this method will return output from all executions.
+ *
+ * Please note that disabling redirection using MobileFFmpegConfig.disableRedirection() method
+ * also disables this functionality.
+ *
+ * @return output of last executed command
+ */
++ (NSString*)getLastCommandOutput {
+    return lastCommandOutput;
+}
+
+/**
+ * Registers a new ignored signal. Ignored signals are not handled by the library.
+ *
+ * @param signum signal number to ignore
+ */
++ (void)ignoreSignal:(int)signum {
+    if (signum == SIGQUIT) {
+        handleSIGQUIT = 0;
+    } else if (signum == SIGINT) {
+        handleSIGINT = 0;
+    } else if (signum == SIGTERM) {
+        handleSIGTERM = 0;
+    } else if (signum == SIGXCPU) {
+        handleSIGXCPU = 0;
+    } else if (signum == SIGPIPE) {
+        handleSIGPIPE = 0;
     }
 }
 

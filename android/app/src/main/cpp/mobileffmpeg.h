@@ -27,7 +27,7 @@
 #include "libavutil/ffversion.h"
 
 /** Library version string */
-#define MOBILE_FFMPEG_VERSION "4.2.2"
+#define MOBILE_FFMPEG_VERSION "4.4"
 
 /** Defines tag used for Android logging. */
 #define LIB_NAME "mobile-ffmpeg"
@@ -91,17 +91,17 @@ JNIEXPORT jstring JNICALL Java_com_arthenica_mobileffmpeg_Config_getNativeVersio
 
 /*
  * Class:     com_arthenica_mobileffmpeg_Config
- * Method:    nativeExecute
- * Signature: ([Ljava/lang/String;)I
+ * Method:    nativeFFmpegExecute
+ * Signature: (J[Ljava/lang/String;)I
  */
-JNIEXPORT jint JNICALL Java_com_arthenica_mobileffmpeg_Config_nativeExecute(JNIEnv *, jclass, jobjectArray);
+JNIEXPORT jint JNICALL Java_com_arthenica_mobileffmpeg_Config_nativeFFmpegExecute(JNIEnv *, jclass, jlong id, jobjectArray);
 
 /*
  * Class:     com_arthenica_mobileffmpeg_Config
- * Method:    nativeCancel
- * Signature: ()V
+ * Method:    nativeFFmpegCancel
+ * Signature: (J)V
  */
-JNIEXPORT void JNICALL Java_com_arthenica_mobileffmpeg_Config_nativeCancel(JNIEnv *, jclass);
+JNIEXPORT void JNICALL Java_com_arthenica_mobileffmpeg_Config_nativeFFmpegCancel(JNIEnv *, jclass, jlong);
 
 /*
  * Class:     com_arthenica_mobileffmpeg_Config
@@ -123,5 +123,19 @@ JNIEXPORT jstring JNICALL Java_com_arthenica_mobileffmpeg_Config_getNativeBuildD
  * Signature: (Ljava/lang/String;Ljava/lang/String;)I
  */
 JNIEXPORT int JNICALL Java_com_arthenica_mobileffmpeg_Config_setNativeEnvironmentVariable(JNIEnv *env, jclass object, jstring variableName, jstring variableValue);
+
+/*
+ * Class:     com_arthenica_mobileffmpeg_Config
+ * Method:    getNativeLastCommandOutput
+ * Signature: ()Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_com_arthenica_mobileffmpeg_Config_getNativeLastCommandOutput(JNIEnv *env, jclass object);
+
+/*
+ * Class:     com_arthenica_mobileffmpeg_Config
+ * Method:    ignoreNativeSignal
+ * Signature: (I)V
+ */
+JNIEXPORT void JNICALL Java_com_arthenica_mobileffmpeg_Config_ignoreNativeSignal(JNIEnv *env, jclass object, jint signum);
 
 #endif /* MOBILE_FFMPEG_H */

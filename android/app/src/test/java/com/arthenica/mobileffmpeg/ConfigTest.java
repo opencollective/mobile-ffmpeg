@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Taner Sener
+ * Copyright (c) 2018, 2020 Taner Sener
  *
  * This file is part of MobileFFmpeg.
  *
@@ -19,8 +19,7 @@
 
 package com.arthenica.mobileffmpeg;
 
-import junit.framework.Assert;
-
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -138,7 +137,7 @@ public class ConfigTest {
         Collections.sort(enabledList);
 
         Assert.assertNotNull(enabledList);
-        Assert.assertTrue(enabledList.size() == 1);
+        Assert.assertEquals(1, enabledList.size());
     }
 
     @Test

@@ -1,10 +1,10 @@
 project('openh264', ['c', 'cpp'],
-  version : '1.7.0',
-  meson_version : '>= 0.43',
+  version : '2.1.1',
+  meson_version : '>= 0.47',
   default_options : [ 'warning_level=1',
                       'buildtype=debugoptimized' ])
 
-major_version = '4'
+major_version = '6'
 
 cpp = meson.get_compiler('cpp')
 
@@ -45,6 +45,7 @@ cpu_family = host_machine.cpu_family()
 
 supported_arguments = cpp.get_supported_arguments([
   '-Wno-non-virtual-dtor',
+  '-Wno-class-memaccess',
   '-Wno-strict-aliasing'])
 
 add_project_arguments(supported_arguments, language: 'cpp')
@@ -111,6 +112,7 @@ libopenh264_shared = shared_library('openh264',
   install: true,
   soversion: major_version,
   version: meson.project_version(),
+  vs_module_defs: 'openh264.def',
   dependencies: deps)
 
 libopenh264_static = static_library('openh264',
@@ -123,6 +125,7 @@ pkg_install_dir = '@0@/pkgconfig'.format(get_option('libdir'))
 foreach t : ['', '-static']
   pkgconf = configuration_data()
   pkgconf.set('prefix', join_paths(get_option('prefix')))
+  pkgconf.set('libdir', '${prefix}/@0@'.format(get_option('libdir')))
   pkgconf.set('VERSION', meson.project_version())
   if t == '-static'
     do_install = false

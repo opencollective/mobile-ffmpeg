@@ -598,6 +598,10 @@ encode_ber_digest_info(const mac_entry_st * e,
 	uint8_t *tmp_output;
 	int tmp_output_size;
 
+	/* prevent asn1_write_value() treating input as string */
+	if (digest->size == 0)
+		return gnutls_assert_val(GNUTLS_E_INVALID_REQUEST);
+
 	algo = _gnutls_x509_mac_to_oid(e);
 	if (algo == NULL) {
 		gnutls_assert();
@@ -1211,6 +1215,7 @@ pk_prepare_hash(gnutls_pk_algorithm_t pk,
 	case GNUTLS_PK_DSA:
 	case GNUTLS_PK_ECDSA:
 	case GNUTLS_PK_EDDSA_ED25519:
+	case GNUTLS_PK_EDDSA_ED448:
 	case GNUTLS_PK_GOST_01:
 	case GNUTLS_PK_GOST_12_256:
 	case GNUTLS_PK_GOST_12_512:

@@ -1617,7 +1617,13 @@ _pkcs11_traverse_tokens(find_func_t find_func, void *input,
 					 info, flags);
 			if (ret < 0) {
 				gnutls_assert();
-				return ret;
+				pkcs11_close_session(&sinfo);
+
+				/* treat the error as fatal only if
+				 * the token requires login */
+				if (l_tinfo.flags & CKF_LOGIN_REQUIRED)
+					return ret;
+				continue;
 			}
 
 			ret =
@@ -1891,6 +1897,35 @@ int pkcs11_read_pubkey(struct ck_function_list *module,
 		}
 
 		break;
+#ifdef HAVE_CKM_EDDSA
+	case CKK_EC_EDWARDS:
+		a[0].type = CKA_EC_PARAMS;
+		a[0].value = tmp1;
+		a[0].value_len = tmp1_size;
+
+		a[1].type = CKA_EC_POINT;
+		a[1].value = tmp2;
+		a[1].value_len = tmp2_size;
+
+		if ((rv = pkcs11_get_attribute_value(module, pks, ctx, a, 2)) ==
+		    CKR_OK) {
+
+			pobj->pubkey[0].data = a[0].value;
+			pobj->pubkey[0].size = a[0].value_len;
+
+			pobj->pubkey[1].data = a[1].value;
+			pobj->pubkey[1].size = a[1].value_len;
+
+			pobj->pubkey_size = 2;
+		} else {
+			gnutls_assert();
+
+			ret = pkcs11_rv_to_err(rv);
+			goto cleanup;
+		}
+
+		break;
+#endif
 	default:
 		_gnutls_debug_log("requested reading public key of unsupported type %u\n", (unsigned)key_type);
 		ret = gnutls_assert_val(GNUTLS_E_UNIMPLEMENTED_FEATURE);

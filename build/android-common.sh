@@ -1,20 +1,6 @@
 #!/bin/bash
 
-get_cpu_count() {
-    if [ "$(uname)" == "Darwin" ]; then
-        echo $(sysctl -n hw.physicalcpu)
-    else
-        echo $(nproc)
-    fi
-}
-
-prepare_inline_sed() {
-    if [ "$(uname)" == "Darwin" ]; then
-        export SED_INLINE="sed -i .tmp"
-    else
-        export SED_INLINE="sed -i"
-    fi
-}
+source "${BASEDIR}/build/arch-common.sh"
 
 get_library_name() {
     case $1 in
@@ -40,28 +26,32 @@ get_library_name() {
         19) echo "xvidcore" ;;
         20) echo "x265" ;;
         21) echo "libvidstab" ;;
-        22) echo "libilbc" ;;
-        23) echo "opus" ;;
-        24) echo "snappy" ;;
-        25) echo "soxr" ;;
-        26) echo "libaom" ;;
-        27) echo "chromaprint" ;;
-        28) echo "twolame" ;;
-        29) echo "sdl" ;;
-        30) echo "tesseract" ;;
-        31) echo "openh264" ;;
-        32) echo "giflib" ;;
-        33) echo "jpeg" ;;
-        34) echo "libogg" ;;
-        35) echo "libpng" ;;
-        36) echo "libuuid" ;;
-        37) echo "nettle" ;;
-        38) echo "tiff" ;;
-        39) echo "expat" ;;
-        40) echo "libsndfile" ;;
-        41) echo "leptonica" ;;
-        42) echo "android-zlib" ;;
-        43) echo "android-media-codec" ;;
+        22) echo "rubberband" ;;
+        23) echo "libilbc" ;;
+        24) echo "opus" ;;
+        25) echo "snappy" ;;
+        26) echo "soxr" ;;
+        27) echo "libaom" ;;
+        28) echo "chromaprint" ;;
+        29) echo "twolame" ;;
+        30) echo "sdl" ;;
+        31) echo "tesseract" ;;
+        32) echo "openh264" ;;
+        33) echo "vo-amrwbenc" ;;
+        34) echo "giflib" ;;
+        35) echo "jpeg" ;;
+        36) echo "libogg" ;;
+        37) echo "libpng" ;;
+        38) echo "libuuid" ;;
+        39) echo "nettle" ;;
+        40) echo "tiff" ;;
+        41) echo "expat" ;;
+        42) echo "libsndfile" ;;
+        43) echo "leptonica" ;;
+        44) echo "libsamplerate" ;;
+        45) echo "android-zlib" ;;
+        46) echo "android-media-codec" ;;
+        47) echo "cpu-features" ;;
     esac
 }
 
@@ -75,7 +65,7 @@ get_arch_name() {
     esac
 }
 
-get_target_host() {
+get_build_host() {
     case ${ARCH} in
         arm-v7a | arm-v7a-neon)
             echo "arm-linux-androideabi"
@@ -151,11 +141,7 @@ get_target_build() {
             echo "arm"
         ;;
         arm-v7a-neon)
-            if [[ ! -z ${MOBILE_FFMPEG_LTS_BUILD} ]]; then
-                echo "arm/neon"
-            else
-                echo "arm"
-            fi
+            echo "arm/neon"
         ;;
         arm64-v8a)
             echo "arm64"
@@ -204,7 +190,7 @@ get_android_arch() {
 }
 
 get_common_includes() {
-    echo "-I${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/sysroot/usr/include -I${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/sysroot/usr/local/include"
+    echo ""
 }
 
 get_common_cflags() {
@@ -282,7 +268,6 @@ get_size_optimization_cflags() {
 }
 
 get_app_specific_cflags() {
-
     local APP_FLAGS=""
     case $1 in
         xvidcore)
@@ -291,14 +276,17 @@ get_app_specific_cflags() {
         ffmpeg)
             APP_FLAGS="-Wno-unused-function -DBIONIC_IOCTL_NO_SIGNEDNESS_OVERLOAD"
         ;;
+        kvazaar)
+            APP_FLAGS="-std=gnu99 -Wno-unused-function"
+        ;;
+        rubberband)
+            APP_FLAGS="-std=c99 -Wno-unused-function"
+        ;;
         shine)
             APP_FLAGS="-Wno-unused-function"
         ;;
         soxr | snappy | libwebp)
             APP_FLAGS="-std=gnu99 -Wno-unused-function -DPIC"
-        ;;
-        kvazaar)
-            APP_FLAGS="-std=gnu99 -Wno-unused-function"
         ;;
         *)
             APP_FLAGS="-std=c99 -Wno-unused-function"
@@ -352,6 +340,9 @@ get_cxxflags() {
         x265)
             echo "-std=c++11 -fno-exceptions ${OPTIMIZATION_FLAGS}"
         ;;
+        rubberband)
+            echo "-std=c++11 ${OPTIMIZATION_FLAGS}"
+        ;;
         *)
             echo "-std=c++11 -fno-exceptions -fno-rtti ${OPTIMIZATION_FLAGS}"
         ;;
@@ -359,7 +350,7 @@ get_cxxflags() {
 }
 
 get_common_linked_libraries() {
-    local COMMON_LIBRARY_PATHS="-L${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/${TARGET_HOST}/lib -L${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/sysroot/usr/lib/${TARGET_HOST}/${API} -L${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/lib"
+    local COMMON_LIBRARY_PATHS="-L${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/${BUILD_HOST}/lib -L${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/sysroot/usr/lib/${BUILD_HOST}/${API} -L${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/lib"
 
     case $1 in
         ffmpeg)
@@ -441,7 +432,7 @@ get_ldflags() {
     fi
     local COMMON_LINKED_LIBS=$(get_common_linked_libraries $1)
 
-    echo "${ARCH_FLAGS} ${OPTIMIZATION_FLAGS} ${COMMON_LINKED_LIBS} -Wl,--exclude-libs,libgcc.a -Wl,--exclude-libs,libunwind.a"
+    echo "${ARCH_FLAGS} ${OPTIMIZATION_FLAGS} ${COMMON_LINKED_LIBS} -Wl,--hash-style=both -Wl,--exclude-libs,libgcc.a -Wl,--exclude-libs,libunwind.a"
 }
 
 create_chromaprint_package_config() {
@@ -674,25 +665,6 @@ Cflags: -I\${includedir}
 EOF
 }
 
-create_libwebp_package_config() {
-    local LIB_WEBP_VERSION="$1"
-
-    cat > "${INSTALL_PKG_CONFIG_DIR}/libwebp.pc" << EOF
-prefix=${BASEDIR}/prebuilt/android-$(get_target_build)/libwebp
-exec_prefix=\${prefix}
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: libwebp
-Description: webp codec library
-Version: ${LIB_WEBP_VERSION}
-
-Requires:
-Libs: -L\${libdir} -lwebp -lwebpdecoder -lwebpdemux
-Cflags: -I\${includedir}
-EOF
-}
-
 create_libxml2_package_config() {
     local LIBXML2_VERSION="$1"
 
@@ -831,7 +803,7 @@ Cflags: -I\${includedir}
 EOF
 }
 
-create_zlib_package_config() {
+create_zlib_system_package_config() {
     ZLIB_VERSION=$(grep '#define ZLIB_VERSION' ${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/sysroot/usr/include/zlib.h | grep -Eo '\".*\"' | sed -e 's/\"//g')
 
     cat > "${INSTALL_PKG_CONFIG_DIR}/zlib.pc" << EOF
@@ -851,168 +823,75 @@ EOF
 }
 
 create_cpufeatures_package_config() {
-    cat > "${INSTALL_PKG_CONFIG_DIR}/cpufeatures.pc" << EOF
-prefix=${ANDROID_NDK_ROOT}/sources/android/cpufeatures
-exec_prefix=\${prefix}
-libdir=\${exec_prefix}
-includedir=\${prefix}
+    cat > "${INSTALL_PKG_CONFIG_DIR}/cpu-features.pc" << EOF
+prefix=${BASEDIR}/prebuilt/android-$(get_target_build)/cpu-features
+exec_prefix=\${prefix}/bin
+libdir=\${prefix}/lib
+includedir=\${prefix}/include/ndk_compat
 
 Name: cpufeatures
-Description: cpu features Android utility
+URL: https://github.com/google/cpu_features
+Description: cpu_features Android compatibility library
 Version: 1.${API}
 
 Requires:
-Libs: -L\${libdir} -lcpufeatures
+Libs: -L\${libdir} -lndk_compat
 Cflags: -I\${includedir}
 EOF
 }
 
-#
-# download <url> <local file name> <on error action>
-#
-download() {
-    if [ ! -d "${MOBILE_FFMPEG_TMPDIR}" ]; then
-        mkdir -p "${MOBILE_FFMPEG_TMPDIR}"
-    fi
-
-    (curl --fail --location $1 -o ${MOBILE_FFMPEG_TMPDIR}/$2 1>>${BASEDIR}/build.log 2>&1)
-
-    local RC=$?
-
-    if [ ${RC} -eq 0 ]; then
-        echo -e "\nDEBUG: Downloaded $1 to ${MOBILE_FFMPEG_TMPDIR}/$2\n" 1>>${BASEDIR}/build.log 2>&1
-    else
-        rm -f ${MOBILE_FFMPEG_TMPDIR}/$2 1>>${BASEDIR}/build.log 2>&1
-
-        echo -e -n "\nINFO: Failed to download $1 to ${MOBILE_FFMPEG_TMPDIR}/$2, rc=${RC}. " 1>>${BASEDIR}/build.log 2>&1
-
-        if [ "$3" == "exit" ]; then
-            echo -e "DEBUG: Build will now exit.\n" 1>>${BASEDIR}/build.log 2>&1
-            exit 1
-        else
-            echo -e "DEBUG: Build will continue.\n" 1>>${BASEDIR}/build.log 2>&1
-        fi
-    fi
-
-    echo ${RC}
-}
-
-download_gpl_library_source() {
-    local GPL_LIB_URL=""
-    local GPL_LIB_FILE=""
-    local GPL_LIB_ORIG_DIR=""
-    local GPL_LIB_DEST_DIR=""
-
-    echo -e "\nDEBUG: Downloading GPL library source: $1\n" 1>>${BASEDIR}/build.log 2>&1
-
-    case $1 in
-        libvidstab)
-            GPL_LIB_URL="https://github.com/georgmartius/vid.stab/archive/v1.1.0.tar.gz"
-            GPL_LIB_FILE="v1.1.0.tar.gz"
-            GPL_LIB_ORIG_DIR="vid.stab-1.1.0"
-            GPL_LIB_DEST_DIR="libvidstab"
+android_ndk_abi() { # to be used with CMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake
+    case ${ARCH} in
+        arm-v7a | arm-v7a-neon)
+            echo "armeabi-v7a"
         ;;
-        x264)
-            GPL_LIB_URL="ftp://ftp.videolan.org/pub/videolan/x264/snapshots/x264-snapshot-20190701-2245-stable.tar.bz2"
-            GPL_LIB_FILE="x264-snapshot-20190701-2245-stable.tar.bz2"
-            GPL_LIB_ORIG_DIR="x264-snapshot-20190701-2245-stable"
-            GPL_LIB_DEST_DIR="x264"
+        arm64-v8a)
+            echo "arm64-v8a"
         ;;
-        x265)
-            GPL_LIB_URL="https://download.videolan.org/pub/videolan/x265/x265_3.0.tar.gz"
-            GPL_LIB_FILE="x265-3.0.tar.gz"
-            GPL_LIB_ORIG_DIR="x265_3.0"
-            GPL_LIB_DEST_DIR="x265"
+        x86)
+            echo "x86"
         ;;
-        xvidcore)
-            GPL_LIB_URL="https://downloads.xvid.com/downloads/xvidcore-1.3.5.tar.gz"
-            GPL_LIB_FILE="xvidcore-1.3.5.tar.gz"
-            GPL_LIB_ORIG_DIR="xvidcore"
-            GPL_LIB_DEST_DIR="xvidcore"
+        x86-64)
+            echo "x86_64"
         ;;
     esac
+}
 
-    local GPL_LIB_SOURCE_PATH="${BASEDIR}/src/${GPL_LIB_DEST_DIR}"
+android_build_dir() {
+  echo ${BASEDIR}/android/build/${LIB_NAME}/$(get_target_build)
+}
 
-    if [ -d "${GPL_LIB_SOURCE_PATH}" ]; then
-        echo -e "INFO: $1 already downloaded. Source folder found at ${GPL_LIB_SOURCE_PATH}\n" 1>>${BASEDIR}/build.log 2>&1
-        echo 0
-        return
+android_ndk_cmake() {
+    local cmake=$(find ${ANDROID_HOME}/cmake -path \*/bin/cmake -type f -print -quit)
+    if [[ -z ${cmake} ]]; then
+        cmake=$(which cmake)
+    fi
+    if [[ -z ${cmake} ]]; then
+        cmake="missing_cmake"
     fi
 
-    local GPL_LIB_PACKAGE_PATH="${MOBILE_FFMPEG_TMPDIR}/${GPL_LIB_FILE}"
-
-    echo -e "DEBUG: $1 source not found. Checking if library package ${GPL_LIB_FILE} is downloaded at ${GPL_LIB_PACKAGE_PATH} \n" 1>>${BASEDIR}/build.log 2>&1
-
-    if [ ! -f "${GPL_LIB_PACKAGE_PATH}" ]; then
-        echo -e "DEBUG: $1 library package not found. Downloading from ${GPL_LIB_URL}\n" 1>>${BASEDIR}/build.log 2>&1
-
-        local DOWNLOAD_RC=$(download "${GPL_LIB_URL}" "${GPL_LIB_FILE}")
-
-        if [ ${DOWNLOAD_RC} -ne 0 ]; then
-            echo -e "INFO: Downloading GPL library $1 failed. Can not get library package from ${GPL_LIB_URL}\n" 1>>${BASEDIR}/build.log 2>&1
-            echo ${DOWNLOAD_RC}
-            return
-        else
-            echo -e "DEBUG: $1 library package downloaded\n" 1>>${BASEDIR}/build.log 2>&1
-        fi
-    else
-        echo -e "DEBUG: $1 library package already downloaded\n" 1>>${BASEDIR}/build.log 2>&1
-    fi
-
-    local EXTRACT_COMMAND=""
-
-    if [[ ${GPL_LIB_FILE} == *bz2 ]]; then
-        EXTRACT_COMMAND="tar jxf ${GPL_LIB_PACKAGE_PATH} --directory ${MOBILE_FFMPEG_TMPDIR}"
-    else
-        EXTRACT_COMMAND="tar zxf ${GPL_LIB_PACKAGE_PATH} --directory ${MOBILE_FFMPEG_TMPDIR}"
-    fi
-
-    echo -e "DEBUG: Extracting library package ${GPL_LIB_FILE} inside ${MOBILE_FFMPEG_TMPDIR}\n" 1>>${BASEDIR}/build.log 2>&1
-
-    ${EXTRACT_COMMAND} 1>>${BASEDIR}/build.log 2>&1
-
-    local EXTRACT_RC=$?
-
-    if [ ${EXTRACT_RC} -ne 0 ]; then
-        echo -e "\nINFO: Downloading GPL library $1 failed. Extract for library package ${GPL_LIB_FILE} completed with rc=${EXTRACT_RC}. Deleting failed files.\n" 1>>${BASEDIR}/build.log 2>&1
-        rm -f ${GPL_LIB_PACKAGE_PATH} 1>>${BASEDIR}/build.log 2>&1
-        rm -rf ${MOBILE_FFMPEG_TMPDIR}/${GPL_LIB_ORIG_DIR} 1>>${BASEDIR}/build.log 2>&1
-        echo ${EXTRACT_RC}
-        return
-    fi
-
-    echo -e "DEBUG: Extract completed. Copying library source to ${GPL_LIB_SOURCE_PATH}\n" 1>>${BASEDIR}/build.log 2>&1
-
-    COPY_COMMAND="cp -r ${MOBILE_FFMPEG_TMPDIR}/${GPL_LIB_ORIG_DIR} ${GPL_LIB_SOURCE_PATH}"
-
-    ${COPY_COMMAND} 1>>${BASEDIR}/build.log 2>&1
-
-    local COPY_RC=$?
-
-    if [ ${COPY_RC} -eq 0 ]; then
-        echo -e "DEBUG: Downloading GPL library source $1 completed successfully\n" 1>>${BASEDIR}/build.log 2>&1
-    else
-        echo -e "\nINFO: Downloading GPL library $1 failed. Copying library source to ${GPL_LIB_SOURCE_PATH} completed with rc=${COPY_RC}\n" 1>>${BASEDIR}/build.log 2>&1
-        rm -rf ${GPL_LIB_SOURCE_PATH} 1>>${BASEDIR}/build.log 2>&1
-        echo ${COPY_RC}
-        return
-    fi
+    echo ${cmake} \
+  -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_ROOT}/build/cmake/android.toolchain.cmake \
+  -H${BASEDIR}/src/${LIB_NAME} \
+  -B$(android_build_dir) \
+  -DANDROID_ABI=$(android_ndk_abi) \
+  -DANDROID_PLATFORM=android-${API} \
+  -DCMAKE_INSTALL_PREFIX=${BASEDIR}/prebuilt/android-$(get_target_build)/${LIB_NAME}
 }
 
 set_toolchain_clang_paths() {
     export PATH=$PATH:${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/bin
 
-    TARGET_HOST=$(get_target_host)
+    BUILD_HOST=$(get_build_host)
     
-    export AR=${TARGET_HOST}-ar
+    export AR=${BUILD_HOST}-ar
     export CC=$(get_clang_target_host)-clang
     export CXX=$(get_clang_target_host)-clang++
 
     if [ "$1" == "x264" ]; then
         export AS=${CC}
     else
-        export AS=${TARGET_HOST}-as
+        export AS=${BUILD_HOST}-as
     fi
 
     case ${ARCH} in
@@ -1021,9 +900,9 @@ set_toolchain_clang_paths() {
         ;;
     esac
 
-    export LD=${TARGET_HOST}-ld
-    export RANLIB=${TARGET_HOST}-ranlib
-    export STRIP=${TARGET_HOST}-strip
+    export LD=${BUILD_HOST}-ld
+    export RANLIB=${BUILD_HOST}-ranlib
+    export STRIP=${BUILD_HOST}-strip
 
     export INSTALL_PKG_CONFIG_DIR="${BASEDIR}/prebuilt/android-$(get_target_build)/pkgconfig"
     export ZLIB_PACKAGE_CONFIG_PATH="${INSTALL_PKG_CONFIG_DIR}/zlib.pc"
@@ -1033,29 +912,10 @@ set_toolchain_clang_paths() {
     fi
 
     if [ ! -f ${ZLIB_PACKAGE_CONFIG_PATH} ]; then
-        create_zlib_package_config
+        create_zlib_system_package_config
     fi
 
     prepare_inline_sed
-}
-
-build_cpufeatures() {
-
-    # CLEAN OLD BUILD
-    rm -f ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/cpu-features.o 1>>${BASEDIR}/build.log 2>&1
-    rm -f ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/libcpufeatures.a 1>>${BASEDIR}/build.log 2>&1
-    rm -f ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/libcpufeatures.so 1>>${BASEDIR}/build.log 2>&1
-
-    echo -e "\nINFO: Building cpu-features for ${ARCH}\n" 1>>${BASEDIR}/build.log 2>&1
-
-    set_toolchain_clang_paths "cpu-features"
-
-    # THEN BUILD FOR THIS ABI
-    $(get_clang_target_host)-clang -c ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/cpu-features.c -o ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/cpu-features.o 1>>${BASEDIR}/build.log 2>&1
-    ${TARGET_HOST}-ar rcs ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/libcpufeatures.a ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/cpu-features.o 1>>${BASEDIR}/build.log 2>&1
-    $(get_clang_target_host)-clang -shared ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/cpu-features.o -o ${ANDROID_NDK_ROOT}/sources/android/cpufeatures/libcpufeatures.so 1>>${BASEDIR}/build.log 2>&1
-
-    create_cpufeatures_package_config
 }
 
 build_android_lts_support() {
@@ -1071,117 +931,11 @@ build_android_lts_support() {
     set_toolchain_clang_paths ${LIB_NAME}
 
     # PREPARING FLAGS
-    TARGET_HOST=$(get_target_host)
+    BUILD_HOST=$(get_build_host)
     CFLAGS=$(get_cflags ${LIB_NAME})
     LDFLAGS=$(get_ldflags ${LIB_NAME})
 
     # THEN BUILD FOR THIS ABI
     $(get_clang_target_host)-clang ${CFLAGS} -Wno-unused-command-line-argument -c ${BASEDIR}/android/app/src/main/cpp/android_lts_support.c -o ${BASEDIR}/android/app/src/main/cpp/android_lts_support.o ${LDFLAGS} 1>>${BASEDIR}/build.log 2>&1
-    ${TARGET_HOST}-ar rcs ${BASEDIR}/android/app/src/main/cpp/libandroidltssupport.a ${BASEDIR}/android/app/src/main/cpp/android_lts_support.o 1>>${BASEDIR}/build.log 2>&1
-}
-
-autoreconf_library() {
-    echo -e "\nDEBUG: Running full autoreconf for $1\n" 1>>${BASEDIR}/build.log 2>&1
-
-    # TRY FULL RECONF
-    (autoreconf --force --install)
-
-    local EXTRACT_RC=$?
-    if [ ${EXTRACT_RC} -eq 0 ]; then
-        return
-    fi
-
-    echo -e "\nDEBUG: Full autoreconf failed. Running full autoreconf with include for $1\n" 1>>${BASEDIR}/build.log 2>&1
-
-    # TRY FULL RECONF WITH m4
-    (autoreconf --force --install -I m4)
-
-    EXTRACT_RC=$?
-    if [ ${EXTRACT_RC} -eq 0 ]; then
-        return
-    fi
-
-    echo -e "\nDEBUG: Full autoreconf with include failed. Running autoreconf without force for $1\n" 1>>${BASEDIR}/build.log 2>&1
-
-    # TRY RECONF WITHOUT FORCE
-    (autoreconf --install)
-
-    EXTRACT_RC=$?
-    if [ ${EXTRACT_RC} -eq 0 ]; then
-        return
-    fi
-
-    echo -e "\nDEBUG: Autoreconf without force failed. Running autoreconf without force with include for $1\n" 1>>${BASEDIR}/build.log 2>&1
-
-    # TRY RECONF WITHOUT FORCE WITH m4
-    (autoreconf --install -I m4)
-
-    EXTRACT_RC=$?
-    if [ ${EXTRACT_RC} -eq 0 ]; then
-        return
-    fi
-
-    echo -e "\nDEBUG: Autoreconf without force with include failed. Running default autoreconf for $1\n" 1>>${BASEDIR}/build.log 2>&1
-
-    # TRY DEFAULT RECONF
-    (autoreconf)
-
-    EXTRACT_RC=$?
-    if [ ${EXTRACT_RC} -eq 0 ]; then
-        return
-    fi
-
-    echo -e "\nDEBUG: Default autoreconf failed. Running default autoreconf with include for $1\n" 1>>${BASEDIR}/build.log 2>&1
-
-    # TRY DEFAULT RECONF WITH m4
-    (autoreconf -I m4)
-
-    EXTRACT_RC=$?
-    if [ ${EXTRACT_RC} -eq 0 ]; then
-        return
-    fi
-}
-
-library_is_installed() {
-    local INSTALL_PATH=$1
-    local LIB_NAME=$2
-
-    echo -e "DEBUG: Checking if ${LIB_NAME} is already built and installed at ${INSTALL_PATH}/${LIB_NAME}\n" 1>>${BASEDIR}/build.log 2>&1
-
-    if [ ! -d ${INSTALL_PATH}/${LIB_NAME} ]; then
-        echo -e "DEBUG: ${INSTALL_PATH}/${LIB_NAME} directory not found\n" 1>>${BASEDIR}/build.log 2>&1
-        echo 1
-        return
-    fi
-
-    if [ ! -d ${INSTALL_PATH}/${LIB_NAME}/lib ]; then
-        echo -e "DEBUG: ${INSTALL_PATH}/${LIB_NAME}/lib directory not found\n" 1>>${BASEDIR}/build.log 2>&1
-        echo 1
-        return
-    fi
-
-    if [ ! -d ${INSTALL_PATH}/${LIB_NAME}/include ]; then
-        echo -e "DEBUG: ${INSTALL_PATH}/${LIB_NAME}/include directory not found\n" 1>>${BASEDIR}/build.log 2>&1
-        echo 1
-        return
-    fi
-
-    local HEADER_COUNT=$(ls -l ${INSTALL_PATH}/${LIB_NAME}/include | wc -l)
-    local LIB_COUNT=$(ls -l ${INSTALL_PATH}/${LIB_NAME}/lib | wc -l)
-
-    if [[ ${HEADER_COUNT} -eq 0 ]]; then
-        echo -e "DEBUG: No headers found under ${INSTALL_PATH}/${LIB_NAME}/include\n" 1>>${BASEDIR}/build.log 2>&1
-        echo 1
-        return
-    fi
-
-    if [[ ${LIB_COUNT} -eq 0 ]]; then
-        echo -e "DEBUG: No libraries found under ${INSTALL_PATH}/${LIB_NAME}/lib\n" 1>>${BASEDIR}/build.log 2>&1
-        echo 1
-        return
-    fi
-
-    echo -e "INFO: ${LIB_NAME} library is already built and installed\n" 1>>${BASEDIR}/build.log 2>&1
-
-    echo 0
+    ${BUILD_HOST}-ar rcs ${BASEDIR}/android/app/src/main/cpp/libandroidltssupport.a ${BASEDIR}/android/app/src/main/cpp/android_lts_support.o 1>>${BASEDIR}/build.log 2>&1
 }

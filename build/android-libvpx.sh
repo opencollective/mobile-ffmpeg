@@ -23,14 +23,18 @@ fi
 # ENABLE COMMON FUNCTIONS
 . ${BASEDIR}/build/android-common.sh
 
-# PREPARING PATHS & DEFINING ${INSTALL_PKG_CONFIG_DIR}
+# PREPARE PATHS & DEFINE ${INSTALL_PKG_CONFIG_DIR}
 LIB_NAME="libvpx"
 set_toolchain_clang_paths ${LIB_NAME}
 
 # PREPARING FLAGS
 export CFLAGS="$(get_cflags ${LIB_NAME}) -I${ANDROID_NDK_ROOT}/sources/android/cpufeatures"
 export CXXFLAGS=$(get_cxxflags ${LIB_NAME})
-export LDFLAGS="$(get_ldflags ${LIB_NAME}) -L${ANDROID_NDK_ROOT}/sources/android/cpufeatures -lcpufeatures"
+export LDFLAGS="$(get_ldflags ${LIB_NAME})"
+
+# RECOVER configure.sh
+rm -f ${BASEDIR}/src/${LIB_NAME}/build/make/configure.sh
+cp ${BASEDIR}/tools/make/configure.libvpx.android.sh ${BASEDIR}/src/${LIB_NAME}/build/make/configure.sh
 
 TARGET_CPU=""
 DISABLE_NEON_FLAG=""

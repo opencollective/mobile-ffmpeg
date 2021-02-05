@@ -6,7 +6,7 @@
  *  From the definitions    ocsptool-args.def
  *  and the template file   options
  *
- * Generated from AutoOpts 41:1:16 templates.
+ * Generated from AutoOpts 42:1:17 templates.
  *
  *  AutoOpts is a copyrighted work.  This source file is not encumbered
  *  by AutoOpts licensing, but is provided under the licensing terms chosen
@@ -19,7 +19,7 @@
  * The ocsptool program is copyrighted and licensed
  * under the following terms:
  *
- *  Copyright (C) 2000-2019 Free Software Foundation, and others, all rights reserved.
+ *  Copyright (C) 2000-2020 Free Software Foundation, and others, all rights reserved.
  *  This is free software. It is licensed for use, modification and
  *  redistribution under the terms of the GNU General Public License,
  *  version 3 or later <http://gnu.org/licenses/gpl.html>
@@ -42,18 +42,22 @@
 #define OPTION_CODE_COMPILE 1
 #include "ocsptool-args.h"
 #include <sys/types.h>
+#include <sys/stat.h>
 
+#include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <errno.h>
+#include <string.h>
+#include <unistd.h>
 
 #ifdef  __cplusplus
 extern "C" {
 #endif
 extern FILE * option_usage_fp;
 #define zCopyright      (ocsptool_opt_strs+0)
-#define zLicenseDescrip (ocsptool_opt_strs+283)
+#define zLicenseDescrip (ocsptool_opt_strs+284)
 
 
 #ifndef NULL
@@ -63,13 +67,13 @@ extern FILE * option_usage_fp;
 /**
  *  static const strings for ocsptool options
  */
-static char const ocsptool_opt_strs[2758] =
-/*     0 */ "ocsptool 3.6.8\n"
-            "Copyright (C) 2000-2019 Free Software Foundation, and others, all rights reserved.\n"
+static char const ocsptool_opt_strs[2760] =
+/*     0 */ "ocsptool 3.6.13\n"
+            "Copyright (C) 2000-2020 Free Software Foundation, and others, all rights reserved.\n"
             "This is free software. It is licensed for use, modification and\n"
             "redistribution under the terms of the GNU General Public License,\n"
             "version 3 or later <http://gnu.org/licenses/gpl.html>\n\0"
-/*   283 */ "ocsptool is free software: you can redistribute it and/or modify it under\n"
+/*   284 */ "ocsptool is free software: you can redistribute it and/or modify it under\n"
             "the terms of the GNU General Public License as published by the Free\n"
             "Software Foundation, either version 3 of the License, or (at your option)\n"
             "any later version.\n\n"
@@ -79,101 +83,101 @@ static char const ocsptool_opt_strs[2758] =
             "details.\n\n"
             "You should have received a copy of the GNU General Public License along\n"
             "with this program.  If not, see <http://www.gnu.org/licenses/>.\n\0"
-/*   888 */ "Enable debugging\0"
-/*   905 */ "DEBUG\0"
-/*   911 */ "debug\0"
-/*   917 */ "More verbose output\0"
-/*   937 */ "VERBOSE\0"
-/*   945 */ "verbose\0"
-/*   953 */ "Input file\0"
-/*   964 */ "INFILE\0"
-/*   971 */ "infile\0"
-/*   978 */ "Output file\0"
-/*   990 */ "OUTFILE\0"
-/*   998 */ "outfile\0"
-/*  1006 */ "Ask an OCSP/HTTP server on a certificate validity\0"
-/*  1056 */ "ASK\0"
-/*  1060 */ "ask\0"
-/*  1064 */ "Verify response\0"
-/*  1080 */ "VERIFY_RESPONSE\0"
-/*  1096 */ "verify-response\0"
-/*  1112 */ "Print information on a OCSP request\0"
-/*  1148 */ "REQUEST_INFO\0"
-/*  1161 */ "request-info\0"
-/*  1174 */ "Print information on a OCSP response\0"
-/*  1211 */ "RESPONSE_INFO\0"
-/*  1225 */ "response-info\0"
-/*  1239 */ "Generates an OCSP request\0"
-/*  1265 */ "GENERATE_REQUEST\0"
-/*  1282 */ "generate-request\0"
-/*  1299 */ "Use (or not) a nonce to OCSP request\0"
-/*  1336 */ "NONCE\0"
-/*  1342 */ "no-nonce\0"
-/*  1351 */ "no\0"
-/*  1354 */ "Reads a set of certificates forming a chain from file\0"
-/*  1408 */ "LOAD_CHAIN\0"
-/*  1419 */ "load-chain\0"
-/*  1430 */ "Reads issuer's certificate from file\0"
-/*  1467 */ "LOAD_ISSUER\0"
-/*  1479 */ "load-issuer\0"
-/*  1491 */ "Reads the certificate to check from file\0"
-/*  1532 */ "LOAD_CERT\0"
-/*  1542 */ "load-cert\0"
-/*  1552 */ "Read OCSP trust anchors from file\0"
-/*  1586 */ "LOAD_TRUST\0"
-/*  1597 */ "load-trust\0"
-/*  1608 */ "Reads the OCSP response signer from file\0"
-/*  1649 */ "LOAD_SIGNER\0"
-/*  1661 */ "load-signer\0"
-/*  1673 */ "Use DER format for input certificates and private keys\0"
-/*  1728 */ "INDER\0"
-/*  1734 */ "no-inder\0"
-/*  1743 */ "Use DER format for output of responses (this is the default)\0"
-/*  1804 */ "OUTDER\0"
-/*  1811 */ "outder\0"
-/*  1818 */ "Use PEM format for output of responses\0"
-/*  1857 */ "OUTPEM\0"
-/*  1864 */ "outpem\0"
-/*  1871 */ "Reads the DER encoded OCSP request from file\0"
-/*  1916 */ "LOAD_REQUEST\0"
-/*  1929 */ "load-request\0"
-/*  1942 */ "Reads the DER encoded OCSP response from file\0"
-/*  1988 */ "LOAD_RESPONSE\0"
-/*  2002 */ "load-response\0"
-/*  2016 */ "Ignore any verification errors\0"
-/*  2047 */ "IGNORE_ERRORS\0"
-/*  2061 */ "ignore-errors\0"
-/*  2075 */ "Allow broken algorithms, such as MD5 for verification\0"
-/*  2129 */ "VERIFY_ALLOW_BROKEN\0"
-/*  2149 */ "verify-allow-broken\0"
-/*  2169 */ "display extended usage information and exit\0"
-/*  2213 */ "help\0"
-/*  2218 */ "extended usage information passed thru pager\0"
-/*  2263 */ "more-help\0"
-/*  2273 */ "output version information and exit\0"
-/*  2309 */ "version\0"
-/*  2317 */ "OCSPTOOL\0"
-/*  2326 */ "ocsptool - GnuTLS OCSP tool\n"
+/*   889 */ "Enable debugging\0"
+/*   906 */ "DEBUG\0"
+/*   912 */ "debug\0"
+/*   918 */ "More verbose output\0"
+/*   938 */ "VERBOSE\0"
+/*   946 */ "verbose\0"
+/*   954 */ "Input file\0"
+/*   965 */ "INFILE\0"
+/*   972 */ "infile\0"
+/*   979 */ "Output file\0"
+/*   991 */ "OUTFILE\0"
+/*   999 */ "outfile\0"
+/*  1007 */ "Ask an OCSP/HTTP server on a certificate validity\0"
+/*  1057 */ "ASK\0"
+/*  1061 */ "ask\0"
+/*  1065 */ "Verify response\0"
+/*  1081 */ "VERIFY_RESPONSE\0"
+/*  1097 */ "verify-response\0"
+/*  1113 */ "Print information on a OCSP request\0"
+/*  1149 */ "REQUEST_INFO\0"
+/*  1162 */ "request-info\0"
+/*  1175 */ "Print information on a OCSP response\0"
+/*  1212 */ "RESPONSE_INFO\0"
+/*  1226 */ "response-info\0"
+/*  1240 */ "Generates an OCSP request\0"
+/*  1266 */ "GENERATE_REQUEST\0"
+/*  1283 */ "generate-request\0"
+/*  1300 */ "Use (or not) a nonce to OCSP request\0"
+/*  1337 */ "NONCE\0"
+/*  1343 */ "no-nonce\0"
+/*  1352 */ "no\0"
+/*  1355 */ "Reads a set of certificates forming a chain from file\0"
+/*  1409 */ "LOAD_CHAIN\0"
+/*  1420 */ "load-chain\0"
+/*  1431 */ "Reads issuer's certificate from file\0"
+/*  1468 */ "LOAD_ISSUER\0"
+/*  1480 */ "load-issuer\0"
+/*  1492 */ "Reads the certificate to check from file\0"
+/*  1533 */ "LOAD_CERT\0"
+/*  1543 */ "load-cert\0"
+/*  1553 */ "Read OCSP trust anchors from file\0"
+/*  1587 */ "LOAD_TRUST\0"
+/*  1598 */ "load-trust\0"
+/*  1609 */ "Reads the OCSP response signer from file\0"
+/*  1650 */ "LOAD_SIGNER\0"
+/*  1662 */ "load-signer\0"
+/*  1674 */ "Use DER format for input certificates and private keys\0"
+/*  1729 */ "INDER\0"
+/*  1735 */ "no-inder\0"
+/*  1744 */ "Use DER format for output of responses (this is the default)\0"
+/*  1805 */ "OUTDER\0"
+/*  1812 */ "outder\0"
+/*  1819 */ "Use PEM format for output of responses\0"
+/*  1858 */ "OUTPEM\0"
+/*  1865 */ "outpem\0"
+/*  1872 */ "Reads the DER encoded OCSP request from file\0"
+/*  1917 */ "LOAD_REQUEST\0"
+/*  1930 */ "load-request\0"
+/*  1943 */ "Reads the DER encoded OCSP response from file\0"
+/*  1989 */ "LOAD_RESPONSE\0"
+/*  2003 */ "load-response\0"
+/*  2017 */ "Ignore any verification errors\0"
+/*  2048 */ "IGNORE_ERRORS\0"
+/*  2062 */ "ignore-errors\0"
+/*  2076 */ "Allow broken algorithms, such as MD5 for verification\0"
+/*  2130 */ "VERIFY_ALLOW_BROKEN\0"
+/*  2150 */ "verify-allow-broken\0"
+/*  2170 */ "display extended usage information and exit\0"
+/*  2214 */ "help\0"
+/*  2219 */ "extended usage information passed thru pager\0"
+/*  2264 */ "more-help\0"
+/*  2274 */ "output version information and exit\0"
+/*  2310 */ "version\0"
+/*  2318 */ "OCSPTOOL\0"
+/*  2327 */ "ocsptool - GnuTLS OCSP tool\n"
             "Usage:  %s [ -<flag> [<val>] | --<name>[{=| }<val>] ]...\n\0"
-/*  2412 */ "bugs@gnutls.org\0"
-/*  2428 */ "\n\0"
-/*  2430 */ "ocsptool is a program that can parse and print information about OCSP\n"
+/*  2413 */ "bugs@gnutls.org\0"
+/*  2429 */ "\n\0"
+/*  2431 */ "ocsptool is a program that can parse and print information about OCSP\n"
             "requests/responses, generate requests and verify responses.  Unlike other\n"
             "GnuTLS applications it outputs DER encoded structures by default unless the\n"
             "'--outpem' option is specified.\n\0"
-/*  2683 */ "ocsptool 3.6.8\0"
-/*  2698 */ "ocsptool [options]\n"
+/*  2684 */ "ocsptool 3.6.13\0"
+/*  2700 */ "ocsptool [options]\n"
             "ocsptool --help for usage instructions.\n";
 
 /**
  *  debug option description:
  */
 /** Descriptive text for the debug option */
-#define DEBUG_DESC      (ocsptool_opt_strs+888)
+#define DEBUG_DESC      (ocsptool_opt_strs+889)
 /** Upper-cased name for the debug option */
-#define DEBUG_NAME      (ocsptool_opt_strs+905)
+#define DEBUG_NAME      (ocsptool_opt_strs+906)
 /** Name string for the debug option */
-#define DEBUG_name      (ocsptool_opt_strs+911)
+#define DEBUG_name      (ocsptool_opt_strs+912)
 /** Compiled in flag settings for the debug option */
 #define DEBUG_FLAGS     (OPTST_DISABLED \
         | OPTST_SET_ARGTYPE(OPARG_TYPE_NUMERIC))
@@ -182,11 +186,11 @@ static char const ocsptool_opt_strs[2758] =
  *  verbose option description:
  */
 /** Descriptive text for the verbose option */
-#define VERBOSE_DESC      (ocsptool_opt_strs+917)
+#define VERBOSE_DESC      (ocsptool_opt_strs+918)
 /** Upper-cased name for the verbose option */
-#define VERBOSE_NAME      (ocsptool_opt_strs+937)
+#define VERBOSE_NAME      (ocsptool_opt_strs+938)
 /** Name string for the verbose option */
-#define VERBOSE_name      (ocsptool_opt_strs+945)
+#define VERBOSE_name      (ocsptool_opt_strs+946)
 /** Compiled in flag settings for the verbose option */
 #define VERBOSE_FLAGS     (OPTST_DISABLED)
 
@@ -194,11 +198,11 @@ static char const ocsptool_opt_strs[2758] =
  *  infile option description:
  */
 /** Descriptive text for the infile option */
-#define INFILE_DESC      (ocsptool_opt_strs+953)
+#define INFILE_DESC      (ocsptool_opt_strs+954)
 /** Upper-cased name for the infile option */
-#define INFILE_NAME      (ocsptool_opt_strs+964)
+#define INFILE_NAME      (ocsptool_opt_strs+965)
 /** Name string for the infile option */
-#define INFILE_name      (ocsptool_opt_strs+971)
+#define INFILE_name      (ocsptool_opt_strs+972)
 /** Compiled in flag settings for the infile option */
 #define INFILE_FLAGS     (OPTST_DISABLED \
         | OPTST_SET_ARGTYPE(OPARG_TYPE_FILE))
@@ -207,11 +211,11 @@ static char const ocsptool_opt_strs[2758] =
  *  outfile option description:
  */
 /** Descriptive text for the outfile option */
-#define OUTFILE_DESC      (ocsptool_opt_strs+978)
+#define OUTFILE_DESC      (ocsptool_opt_strs+979)
 /** Upper-cased name for the outfile option */
-#define OUTFILE_NAME      (ocsptool_opt_strs+990)
+#define OUTFILE_NAME      (ocsptool_opt_strs+991)
 /** Name string for the outfile option */
-#define OUTFILE_name      (ocsptool_opt_strs+998)
+#define OUTFILE_name      (ocsptool_opt_strs+999)
 /** Compiled in flag settings for the outfile option */
 #define OUTFILE_FLAGS     (OPTST_DISABLED \
         | OPTST_SET_ARGTYPE(OPARG_TYPE_STRING))
@@ -220,11 +224,11 @@ static char const ocsptool_opt_strs[2758] =
  *  ask option description:
  */
 /** Descriptive text for the ask option */
-#define ASK_DESC      (ocsptool_opt_strs+1006)
+#define ASK_DESC      (ocsptool_opt_strs+1007)
 /** Upper-cased name for the ask option */
-#define ASK_NAME      (ocsptool_opt_strs+1056)
+#define ASK_NAME      (ocsptool_opt_strs+1057)
 /** Name string for the ask option */
-#define ASK_name      (ocsptool_opt_strs+1060)
+#define ASK_name      (ocsptool_opt_strs+1061)
 /** Compiled in flag settings for the ask option */
 #define ASK_FLAGS     (OPTST_DISABLED \
         | OPTST_SET_ARGTYPE(OPARG_TYPE_STRING) | OPTST_ARG_OPTIONAL)
@@ -233,11 +237,11 @@ static char const ocsptool_opt_strs[2758] =
  *  verify-response option description:
  */
 /** Descriptive text for the verify-response option */
-#define VERIFY_RESPONSE_DESC      (ocsptool_opt_strs+1064)
+#define VERIFY_RESPONSE_DESC      (ocsptool_opt_strs+1065)
 /** Upper-cased name for the verify-response option */
-#define VERIFY_RESPONSE_NAME      (ocsptool_opt_strs+1080)
+#define VERIFY_RESPONSE_NAME      (ocsptool_opt_strs+1081)
 /** Name string for the verify-response option */
-#define VERIFY_RESPONSE_name      (ocsptool_opt_strs+1096)
+#define VERIFY_RESPONSE_name      (ocsptool_opt_strs+1097)
 /** Compiled in flag settings for the verify-response option */
 #define VERIFY_RESPONSE_FLAGS     (OPTST_DISABLED)
 
@@ -245,11 +249,11 @@ static char const ocsptool_opt_strs[2758] =
  *  request-info option description:
  */
 /** Descriptive text for the request-info option */
-#define REQUEST_INFO_DESC      (ocsptool_opt_strs+1112)
+#define REQUEST_INFO_DESC      (ocsptool_opt_strs+1113)
 /** Upper-cased name for the request-info option */
-#define REQUEST_INFO_NAME      (ocsptool_opt_strs+1148)
+#define REQUEST_INFO_NAME      (ocsptool_opt_strs+1149)
 /** Name string for the request-info option */
-#define REQUEST_INFO_name      (ocsptool_opt_strs+1161)
+#define REQUEST_INFO_name      (ocsptool_opt_strs+1162)
 /** Compiled in flag settings for the request-info option */
 #define REQUEST_INFO_FLAGS     (OPTST_DISABLED)
 
@@ -257,11 +261,11 @@ static char const ocsptool_opt_strs[2758] =
  *  response-info option description:
  */
 /** Descriptive text for the response-info option */
-#define RESPONSE_INFO_DESC      (ocsptool_opt_strs+1174)
+#define RESPONSE_INFO_DESC      (ocsptool_opt_strs+1175)
 /** Upper-cased name for the response-info option */
-#define RESPONSE_INFO_NAME      (ocsptool_opt_strs+1211)
+#define RESPONSE_INFO_NAME      (ocsptool_opt_strs+1212)
 /** Name string for the response-info option */
-#define RESPONSE_INFO_name      (ocsptool_opt_strs+1225)
+#define RESPONSE_INFO_name      (ocsptool_opt_strs+1226)
 /** Compiled in flag settings for the response-info option */
 #define RESPONSE_INFO_FLAGS     (OPTST_DISABLED)
 
@@ -269,11 +273,11 @@ static char const ocsptool_opt_strs[2758] =
  *  generate-request option description:
  */
 /** Descriptive text for the generate-request option */
-#define GENERATE_REQUEST_DESC      (ocsptool_opt_strs+1239)
+#define GENERATE_REQUEST_DESC      (ocsptool_opt_strs+1240)
 /** Upper-cased name for the generate-request option */
-#define GENERATE_REQUEST_NAME      (ocsptool_opt_strs+1265)
+#define GENERATE_REQUEST_NAME      (ocsptool_opt_strs+1266)
 /** Name string for the generate-request option */
-#define GENERATE_REQUEST_name      (ocsptool_opt_strs+1282)
+#define GENERATE_REQUEST_name      (ocsptool_opt_strs+1283)
 /** Compiled in flag settings for the generate-request option */
 #define GENERATE_REQUEST_FLAGS     (OPTST_DISABLED)
 
@@ -281,13 +285,13 @@ static char const ocsptool_opt_strs[2758] =
  *  nonce option description:
  */
 /** Descriptive text for the nonce option */
-#define NONCE_DESC      (ocsptool_opt_strs+1299)
+#define NONCE_DESC      (ocsptool_opt_strs+1300)
 /** Upper-cased name for the nonce option */
-#define NONCE_NAME      (ocsptool_opt_strs+1336)
+#define NONCE_NAME      (ocsptool_opt_strs+1337)
 /** disablement name for the nonce option */
-#define NOT_NONCE_name  (ocsptool_opt_strs+1342)
+#define NOT_NONCE_name  (ocsptool_opt_strs+1343)
 /** disablement prefix for the nonce option */
-#define NOT_NONCE_PFX   (ocsptool_opt_strs+1351)
+#define NOT_NONCE_PFX   (ocsptool_opt_strs+1352)
 /** Name string for the nonce option */
 #define NONCE_name      (NOT_NONCE_name + 3)
 /** Compiled in flag settings for the nonce option */
@@ -297,11 +301,11 @@ static char const ocsptool_opt_strs[2758] =
  *  load-chain option description:
  */
 /** Descriptive text for the load-chain option */
-#define LOAD_CHAIN_DESC      (ocsptool_opt_strs+1354)
+#define LOAD_CHAIN_DESC      (ocsptool_opt_strs+1355)
 /** Upper-cased name for the load-chain option */
-#define LOAD_CHAIN_NAME      (ocsptool_opt_strs+1408)
+#define LOAD_CHAIN_NAME      (ocsptool_opt_strs+1409)
 /** Name string for the load-chain option */
-#define LOAD_CHAIN_name      (ocsptool_opt_strs+1419)
+#define LOAD_CHAIN_name      (ocsptool_opt_strs+1420)
 /** Compiled in flag settings for the load-chain option */
 #define LOAD_CHAIN_FLAGS     (OPTST_DISABLED \
         | OPTST_SET_ARGTYPE(OPARG_TYPE_FILE))
@@ -310,11 +314,11 @@ static char const ocsptool_opt_strs[2758] =
  *  load-issuer option description:
  */
 /** Descriptive text for the load-issuer option */
-#define LOAD_ISSUER_DESC      (ocsptool_opt_strs+1430)
+#define LOAD_ISSUER_DESC      (ocsptool_opt_strs+1431)
 /** Upper-cased name for the load-issuer option */
-#define LOAD_ISSUER_NAME      (ocsptool_opt_strs+1467)
+#define LOAD_ISSUER_NAME      (ocsptool_opt_strs+1468)
 /** Name string for the load-issuer option */
-#define LOAD_ISSUER_name      (ocsptool_opt_strs+1479)
+#define LOAD_ISSUER_name      (ocsptool_opt_strs+1480)
 /** Compiled in flag settings for the load-issuer option */
 #define LOAD_ISSUER_FLAGS     (OPTST_DISABLED \
         | OPTST_SET_ARGTYPE(OPARG_TYPE_FILE))
@@ -323,11 +327,11 @@ static char const ocsptool_opt_strs[2758] =
  *  load-cert option description:
  */
 /** Descriptive text for the load-cert option */
-#define LOAD_CERT_DESC      (ocsptool_opt_strs+1491)
+#define LOAD_CERT_DESC      (ocsptool_opt_strs+1492)
 /** Upper-cased name for the load-cert option */
-#define LOAD_CERT_NAME      (ocsptool_opt_strs+1532)
+#define LOAD_CERT_NAME      (ocsptool_opt_strs+1533)
 /** Name string for the load-cert option */
-#define LOAD_CERT_name      (ocsptool_opt_strs+1542)
+#define LOAD_CERT_name      (ocsptool_opt_strs+1543)
 /** Compiled in flag settings for the load-cert option */
 #define LOAD_CERT_FLAGS     (OPTST_DISABLED \
         | OPTST_SET_ARGTYPE(OPARG_TYPE_FILE))
@@ -337,11 +341,11 @@ static char const ocsptool_opt_strs[2758] =
  *  "Must also have options" and "Incompatible options":
  */
 /** Descriptive text for the load-trust option */
-#define LOAD_TRUST_DESC      (ocsptool_opt_strs+1552)
+#define LOAD_TRUST_DESC      (ocsptool_opt_strs+1553)
 /** Upper-cased name for the load-trust option */
-#define LOAD_TRUST_NAME      (ocsptool_opt_strs+1586)
+#define LOAD_TRUST_NAME      (ocsptool_opt_strs+1587)
 /** Name string for the load-trust option */
-#define LOAD_TRUST_name      (ocsptool_opt_strs+1597)
+#define LOAD_TRUST_name      (ocsptool_opt_strs+1598)
 /** Other options that appear in conjunction with the load-trust option */
 static int const aLoad_TrustCantList[] = {
     INDEX_OPT_LOAD_SIGNER, NO_EQUIVALENT };
@@ -354,11 +358,11 @@ static int const aLoad_TrustCantList[] = {
  *  "Must also have options" and "Incompatible options":
  */
 /** Descriptive text for the load-signer option */
-#define LOAD_SIGNER_DESC      (ocsptool_opt_strs+1608)
+#define LOAD_SIGNER_DESC      (ocsptool_opt_strs+1609)
 /** Upper-cased name for the load-signer option */
-#define LOAD_SIGNER_NAME      (ocsptool_opt_strs+1649)
+#define LOAD_SIGNER_NAME      (ocsptool_opt_strs+1650)
 /** Name string for the load-signer option */
-#define LOAD_SIGNER_name      (ocsptool_opt_strs+1661)
+#define LOAD_SIGNER_name      (ocsptool_opt_strs+1662)
 /** Other options that appear in conjunction with the load-signer option */
 static int const aLoad_SignerCantList[] = {
     INDEX_OPT_LOAD_TRUST, NO_EQUIVALENT };
@@ -370,13 +374,13 @@ static int const aLoad_SignerCantList[] = {
  *  inder option description:
  */
 /** Descriptive text for the inder option */
-#define INDER_DESC      (ocsptool_opt_strs+1673)
+#define INDER_DESC      (ocsptool_opt_strs+1674)
 /** Upper-cased name for the inder option */
-#define INDER_NAME      (ocsptool_opt_strs+1728)
+#define INDER_NAME      (ocsptool_opt_strs+1729)
 /** disablement name for the inder option */
-#define NOT_INDER_name  (ocsptool_opt_strs+1734)
+#define NOT_INDER_name  (ocsptool_opt_strs+1735)
 /** disablement prefix for the inder option */
-#define NOT_INDER_PFX   (ocsptool_opt_strs+1351)
+#define NOT_INDER_PFX   (ocsptool_opt_strs+1352)
 /** Name string for the inder option */
 #define INDER_name      (NOT_INDER_name + 3)
 /** Compiled in flag settings for the inder option */
@@ -386,11 +390,11 @@ static int const aLoad_SignerCantList[] = {
  *  outder option description:
  */
 /** Descriptive text for the outder option */
-#define OUTDER_DESC      (ocsptool_opt_strs+1743)
+#define OUTDER_DESC      (ocsptool_opt_strs+1744)
 /** Upper-cased name for the outder option */
-#define OUTDER_NAME      (ocsptool_opt_strs+1804)
+#define OUTDER_NAME      (ocsptool_opt_strs+1805)
 /** Name string for the outder option */
-#define OUTDER_name      (ocsptool_opt_strs+1811)
+#define OUTDER_name      (ocsptool_opt_strs+1812)
 /** Compiled in flag settings for the outder option */
 #define OUTDER_FLAGS     (OPTST_DISABLED)
 
@@ -398,11 +402,11 @@ static int const aLoad_SignerCantList[] = {
  *  outpem option description:
  */
 /** Descriptive text for the outpem option */
-#define OUTPEM_DESC      (ocsptool_opt_strs+1818)
+#define OUTPEM_DESC      (ocsptool_opt_strs+1819)
 /** Upper-cased name for the outpem option */
-#define OUTPEM_NAME      (ocsptool_opt_strs+1857)
+#define OUTPEM_NAME      (ocsptool_opt_strs+1858)
 /** Name string for the outpem option */
-#define OUTPEM_name      (ocsptool_opt_strs+1864)
+#define OUTPEM_name      (ocsptool_opt_strs+1865)
 /** Compiled in flag settings for the outpem option */
 #define OUTPEM_FLAGS     (OPTST_DISABLED)
 
@@ -410,11 +414,11 @@ static int const aLoad_SignerCantList[] = {
  *  load-request option description:
  */
 /** Descriptive text for the load-request option */
-#define LOAD_REQUEST_DESC      (ocsptool_opt_strs+1871)
+#define LOAD_REQUEST_DESC      (ocsptool_opt_strs+1872)
 /** Upper-cased name for the load-request option */
-#define LOAD_REQUEST_NAME      (ocsptool_opt_strs+1916)
+#define LOAD_REQUEST_NAME      (ocsptool_opt_strs+1917)
 /** Name string for the load-request option */
-#define LOAD_REQUEST_name      (ocsptool_opt_strs+1929)
+#define LOAD_REQUEST_name      (ocsptool_opt_strs+1930)
 /** Compiled in flag settings for the load-request option */
 #define LOAD_REQUEST_FLAGS     (OPTST_DISABLED \
         | OPTST_SET_ARGTYPE(OPARG_TYPE_FILE))
@@ -423,11 +427,11 @@ static int const aLoad_SignerCantList[] = {
  *  load-response option description:
  */
 /** Descriptive text for the load-response option */
-#define LOAD_RESPONSE_DESC      (ocsptool_opt_strs+1942)
+#define LOAD_RESPONSE_DESC      (ocsptool_opt_strs+1943)
 /** Upper-cased name for the load-response option */
-#define LOAD_RESPONSE_NAME      (ocsptool_opt_strs+1988)
+#define LOAD_RESPONSE_NAME      (ocsptool_opt_strs+1989)
 /** Name string for the load-response option */
-#define LOAD_RESPONSE_name      (ocsptool_opt_strs+2002)
+#define LOAD_RESPONSE_name      (ocsptool_opt_strs+2003)
 /** Compiled in flag settings for the load-response option */
 #define LOAD_RESPONSE_FLAGS     (OPTST_DISABLED \
         | OPTST_SET_ARGTYPE(OPARG_TYPE_FILE))
@@ -436,11 +440,11 @@ static int const aLoad_SignerCantList[] = {
  *  ignore-errors option description:
  */
 /** Descriptive text for the ignore-errors option */
-#define IGNORE_ERRORS_DESC      (ocsptool_opt_strs+2016)
+#define IGNORE_ERRORS_DESC      (ocsptool_opt_strs+2017)
 /** Upper-cased name for the ignore-errors option */
-#define IGNORE_ERRORS_NAME      (ocsptool_opt_strs+2047)
+#define IGNORE_ERRORS_NAME      (ocsptool_opt_strs+2048)
 /** Name string for the ignore-errors option */
-#define IGNORE_ERRORS_name      (ocsptool_opt_strs+2061)
+#define IGNORE_ERRORS_name      (ocsptool_opt_strs+2062)
 /** Compiled in flag settings for the ignore-errors option */
 #define IGNORE_ERRORS_FLAGS     (OPTST_DISABLED)
 
@@ -448,22 +452,22 @@ static int const aLoad_SignerCantList[] = {
  *  verify-allow-broken option description:
  */
 /** Descriptive text for the verify-allow-broken option */
-#define VERIFY_ALLOW_BROKEN_DESC      (ocsptool_opt_strs+2075)
+#define VERIFY_ALLOW_BROKEN_DESC      (ocsptool_opt_strs+2076)
 /** Upper-cased name for the verify-allow-broken option */
-#define VERIFY_ALLOW_BROKEN_NAME      (ocsptool_opt_strs+2129)
+#define VERIFY_ALLOW_BROKEN_NAME      (ocsptool_opt_strs+2130)
 /** Name string for the verify-allow-broken option */
-#define VERIFY_ALLOW_BROKEN_name      (ocsptool_opt_strs+2149)
+#define VERIFY_ALLOW_BROKEN_name      (ocsptool_opt_strs+2150)
 /** Compiled in flag settings for the verify-allow-broken option */
 #define VERIFY_ALLOW_BROKEN_FLAGS     (OPTST_DISABLED)
 
 /*
  *  Help/More_Help/Version option descriptions:
  */
-#define HELP_DESC       (ocsptool_opt_strs+2169)
-#define HELP_name       (ocsptool_opt_strs+2213)
+#define HELP_DESC       (ocsptool_opt_strs+2170)
+#define HELP_name       (ocsptool_opt_strs+2214)
 #ifdef HAVE_WORKING_FORK
-#define MORE_HELP_DESC  (ocsptool_opt_strs+2218)
-#define MORE_HELP_name  (ocsptool_opt_strs+2263)
+#define MORE_HELP_DESC  (ocsptool_opt_strs+2219)
+#define MORE_HELP_name  (ocsptool_opt_strs+2264)
 #define MORE_HELP_FLAGS (OPTST_IMM | OPTST_NO_INIT)
 #else
 #define MORE_HELP_DESC  HELP_DESC
@@ -476,8 +480,8 @@ static int const aLoad_SignerCantList[] = {
 #  define VER_FLAGS     (OPTST_SET_ARGTYPE(OPARG_TYPE_STRING) | \
                          OPTST_ARG_OPTIONAL | OPTST_IMM | OPTST_NO_INIT)
 #endif
-#define VER_DESC        (ocsptool_opt_strs+2273)
-#define VER_name        (ocsptool_opt_strs+2309)
+#define VER_DESC        (ocsptool_opt_strs+2274)
+#define VER_name        (ocsptool_opt_strs+2310)
 /**
  *  Declare option callback procedures
  */
@@ -806,22 +810,22 @@ static tOptDesc optDesc[OPTION_CT] = {
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /** Reference to the upper cased version of ocsptool. */
-#define zPROGNAME       (ocsptool_opt_strs+2317)
+#define zPROGNAME       (ocsptool_opt_strs+2318)
 /** Reference to the title line for ocsptool usage. */
-#define zUsageTitle     (ocsptool_opt_strs+2326)
+#define zUsageTitle     (ocsptool_opt_strs+2327)
 /** There is no ocsptool configuration file. */
 #define zRcName         NULL
 /** There are no directories to search for ocsptool config files. */
 #define apzHomeList     NULL
 /** The ocsptool program bug email address. */
-#define zBugsAddr       (ocsptool_opt_strs+2412)
+#define zBugsAddr       (ocsptool_opt_strs+2413)
 /** Clarification/explanation of what ocsptool does. */
-#define zExplain        (ocsptool_opt_strs+2428)
+#define zExplain        (ocsptool_opt_strs+2429)
 /** Extra detail explaining what ocsptool does. */
-#define zDetail         (ocsptool_opt_strs+2430)
+#define zDetail         (ocsptool_opt_strs+2431)
 /** The full version string for ocsptool. */
-#define zFullVersion    (ocsptool_opt_strs+2683)
-/* extracted from optcode.tlib near line 364 */
+#define zFullVersion    (ocsptool_opt_strs+2684)
+/* extracted from optcode.tlib near line 342 */
 
 #if defined(ENABLE_NLS)
 # define OPTPROC_BASE OPTPROC_TRANSLATE | OPTPROC_NXLAT_OPT
@@ -832,7 +836,7 @@ static tOptDesc optDesc[OPTION_CT] = {
 #endif /* ENABLE_NLS */
 
 #define ocsptool_full_usage (NULL)
-#define ocsptool_short_usage (ocsptool_opt_strs+2698)
+#define ocsptool_short_usage (ocsptool_opt_strs+2700)
 
 #endif /* not defined __doxygen__ */
 
@@ -1275,19 +1279,19 @@ static void bogus_function(void) {
      extract the correct strings.  These strings are actually referenced
      by a field name in the ocsptoolOptions structure noted in the
      comments below.  The literal text is defined in ocsptool_opt_strs.
-   
+
      NOTE: the strings below are segmented with respect to the source string
      ocsptool_opt_strs.  The strings above are handed off for translation
      at run time a paragraph at a time.  Consequently, they are presented here
      for translation a paragraph at a time.
-   
+
      ALSO: often the description for an option will reference another option
      by name.  These are set off with apostrophe quotes (I hope).  Do not
      translate option names.
    */
   /* referenced via ocsptoolOptions.pzCopyright */
-  puts(_("ocsptool 3.6.8\n\
-Copyright (C) 2000-2019 Free Software Foundation, and others, all rights reserved.\n\
+  puts(_("ocsptool 3.6.13\n\
+Copyright (C) 2000-2020 Free Software Foundation, and others, all rights reserved.\n\
 This is free software. It is licensed for use, modification and\n\
 redistribution under the terms of the GNU General Public License,\n\
 version 3 or later <http://gnu.org/licenses/gpl.html>\n"));
@@ -1393,7 +1397,7 @@ GnuTLS applications it outputs DER encoded structures by default unless the\n\
 '--outpem' option is specified.\n"));
 
   /* referenced via ocsptoolOptions.pzFullVersion */
-  puts(_("ocsptool 3.6.8"));
+  puts(_("ocsptool 3.6.13"));
 
   /* referenced via ocsptoolOptions.pzFullUsage */
   puts(_("<<<NOT-FOUND>>>"));
@@ -1404,234 +1408,230 @@ ocsptool --help for usage instructions.\n"));
   /* LIBOPTS-MESSAGES: */
 #line 67 "../autoopts.c"
   puts(_("allocation of %d bytes failed\n"));
-#line 93 "../autoopts.c"
+#line 89 "../autoopts.c"
   puts(_("allocation of %d bytes failed\n"));
-#line 53 "../init.c"
+#line 48 "../init.c"
   puts(_("AutoOpts function called without option descriptor\n"));
-#line 86 "../init.c"
+#line 81 "../init.c"
   puts(_("\tThis exceeds the compiled library version:  "));
-#line 84 "../init.c"
+#line 79 "../init.c"
   puts(_("Automated Options Processing Error!\n"
        "\t%s called AutoOpts function with structure version %d:%d:%d.\n"));
-#line 80 "../autoopts.c"
+#line 78 "../autoopts.c"
   puts(_("realloc of %d bytes at 0x%p failed\n"));
-#line 88 "../init.c"
+#line 83 "../init.c"
   puts(_("\tThis is less than the minimum library version:  "));
 #line 121 "../version.c"
   puts(_("Automated Options version %s\n"
-       "\tCopyright (C) 1999-2014 by Bruce Korb - all rights reserved\n"));
-#line 87 "../makeshell.c"
+       "\tCopyright (C) 1999-2017 by Bruce Korb - all rights reserved\n"));
+#line 49 "../makeshell.c"
   puts(_("(AutoOpts bug):  %s.\n"));
 #line 90 "../reset.c"
   puts(_("optionResetOpt() called, but reset-option not configured"));
-#line 295 "../usage.c"
+#line 241 "../usage.c"
   puts(_("could not locate the 'help' option"));
-#line 336 "../autoopts.c"
+#line 330 "../autoopts.c"
   puts(_("optionProcess() was called with invalid data"));
-#line 751 "../usage.c"
+#line 697 "../usage.c"
   puts(_("invalid argument type specified"));
-#line 598 "../find.c"
+#line 568 "../find.c"
   puts(_("defaulted to option with optional arg"));
 #line 76 "../alias.c"
   puts(_("aliasing option is out of range."));
-#line 235 "../enum.c"
+#line 210 "../enum.c"
   puts(_("%s error:  the keyword '%s' is ambiguous for %s\n"));
-#line 108 "../find.c"
+#line 78 "../find.c"
   puts(_("  The following options match:\n"));
-#line 293 "../find.c"
+#line 263 "../find.c"
   puts(_("%s: ambiguous option name: %s (matches %d options)\n"));
 #line 161 "../check.c"
   puts(_("%s: Command line arguments required\n"));
 #line 43 "../alias.c"
   puts(_("%d %s%s options allowed\n"));
-#line 94 "../makeshell.c"
+#line 56 "../makeshell.c"
   puts(_("%s error %d (%s) calling %s for '%s'\n"));
-#line 306 "../makeshell.c"
+#line 268 "../makeshell.c"
   puts(_("interprocess pipe"));
-#line 168 "../version.c"
+#line 171 "../version.c"
   puts(_("error: version option argument '%c' invalid.  Use:\n"
        "\t'v' - version only\n"
        "\t'c' - version and copyright\n"
        "\t'n' - version and full copyright notice\n"));
 #line 58 "../check.c"
   puts(_("%s error:  the '%s' and '%s' options conflict\n"));
-#line 217 "../find.c"
+#line 187 "../find.c"
   puts(_("%s: The '%s' option has been disabled."));
-#line 430 "../find.c"
+#line 400 "../find.c"
   puts(_("%s: The '%s' option has been disabled."));
 #line 38 "../alias.c"
   puts(_("-equivalence"));
-#line 469 "../find.c"
+#line 439 "../find.c"
   puts(_("%s: illegal option -- %c\n"));
 #line 110 "../reset.c"
   puts(_("%s: illegal option -- %c\n"));
-#line 271 "../find.c"
+#line 241 "../find.c"
   puts(_("%s: illegal option -- %s\n"));
-#line 755 "../find.c"
+#line 740 "../find.c"
   puts(_("%s: illegal option -- %s\n"));
 #line 118 "../reset.c"
   puts(_("%s: illegal option -- %s\n"));
-#line 335 "../find.c"
+#line 305 "../find.c"
   puts(_("%s: unknown vendor extension option -- %s\n"));
-#line 160 "../enum.c"
+#line 135 "../enum.c"
   puts(_("  or an integer from %d through %d\n"));
-#line 170 "../enum.c"
+#line 145 "../enum.c"
   puts(_("  or an integer from %d through %d\n"));
-#line 750 "../usage.c"
+#line 696 "../usage.c"
   puts(_("%s error:  invalid option descriptor for %s\n"));
-#line 1084 "../usage.c"
+#line 1030 "../usage.c"
   puts(_("%s error:  invalid option descriptor for %s\n"));
-#line 385 "../find.c"
+#line 355 "../find.c"
   puts(_("%s: invalid option name: %s\n"));
-#line 527 "../find.c"
+#line 497 "../find.c"
   puts(_("%s: The '%s' option requires an argument.\n"));
-#line 156 "../autoopts.c"
+#line 150 "../autoopts.c"
   puts(_("(AutoOpts bug):  Equivalenced option '%s' was equivalenced to both\n"
        "\t'%s' and '%s'."));
 #line 94 "../check.c"
   puts(_("%s error:  The %s option is required\n"));
-#line 632 "../find.c"
+#line 602 "../find.c"
   puts(_("%s: The '%s' option cannot have an argument.\n"));
 #line 151 "../check.c"
   puts(_("%s: Command line arguments are not allowed.\n"));
-#line 536 "../save.c"
+#line 568 "../save.c"
   puts(_("error %d (%s) creating %s\n"));
-#line 235 "../enum.c"
+#line 210 "../enum.c"
   puts(_("%s error:  '%s' does not match any %s keywords.\n"));
 #line 93 "../reset.c"
   puts(_("%s error: The '%s' option requires an argument.\n"));
-#line 186 "../save.c"
+#line 122 "../save.c"
   puts(_("error %d (%s) stat-ing %s\n"));
-#line 239 "../save.c"
+#line 175 "../save.c"
   puts(_("error %d (%s) stat-ing %s\n"));
 #line 143 "../restore.c"
   puts(_("%s error: no saved option state\n"));
-#line 231 "../autoopts.c"
+#line 225 "../autoopts.c"
   puts(_("'%s' is not a command line option.\n"));
 #line 113 "../time.c"
   puts(_("%s error:  '%s' is not a recognizable date/time.\n"));
-#line 131 "../save.c"
-  puts(_("'%s' not defined\n"));
 #line 50 "../time.c"
   puts(_("%s error:  '%s' is not a recognizable time duration.\n"));
 #line 92 "../check.c"
   puts(_("%s error:  The %s option must appear %d times.\n"));
 #line 165 "../numeric.c"
   puts(_("%s error:  '%s' is not a recognizable number.\n"));
-#line 201 "../enum.c"
+#line 176 "../enum.c"
   puts(_("%s error:  %s exceeds %s keyword count\n"));
-#line 333 "../usage.c"
+#line 279 "../usage.c"
   puts(_("Try '%s %s' for more information.\n"));
 #line 45 "../alias.c"
   puts(_("one %s%s option allowed\n"));
-#line 208 "../makeshell.c"
+#line 170 "../makeshell.c"
   puts(_("standard output"));
-#line 943 "../makeshell.c"
+#line 905 "../makeshell.c"
   puts(_("standard output"));
-#line 277 "../usage.c"
+#line 223 "../usage.c"
   puts(_("standard output"));
-#line 418 "../usage.c"
+#line 364 "../usage.c"
   puts(_("standard output"));
-#line 628 "../usage.c"
+#line 574 "../usage.c"
   puts(_("standard output"));
-#line 175 "../version.c"
+#line 178 "../version.c"
   puts(_("standard output"));
-#line 277 "../usage.c"
+#line 223 "../usage.c"
   puts(_("standard error"));
-#line 418 "../usage.c"
+#line 364 "../usage.c"
   puts(_("standard error"));
-#line 628 "../usage.c"
+#line 574 "../usage.c"
   puts(_("standard error"));
-#line 175 "../version.c"
+#line 178 "../version.c"
   puts(_("standard error"));
-#line 208 "../makeshell.c"
+#line 170 "../makeshell.c"
   puts(_("write"));
-#line 943 "../makeshell.c"
+#line 905 "../makeshell.c"
   puts(_("write"));
-#line 276 "../usage.c"
+#line 222 "../usage.c"
   puts(_("write"));
-#line 417 "../usage.c"
+#line 363 "../usage.c"
   puts(_("write"));
-#line 627 "../usage.c"
+#line 573 "../usage.c"
   puts(_("write"));
-#line 174 "../version.c"
+#line 177 "../version.c"
   puts(_("write"));
 #line 60 "../numeric.c"
   puts(_("%s error:  %s option value %ld is out of range.\n"));
 #line 44 "../check.c"
   puts(_("%s error:  %s option requires the %s option\n"));
-#line 130 "../save.c"
+#line 121 "../save.c"
   puts(_("%s warning:  cannot save options - %s not regular file\n"));
-#line 185 "../save.c"
+#line 174 "../save.c"
   puts(_("%s warning:  cannot save options - %s not regular file\n"));
-#line 238 "../save.c"
+#line 193 "../save.c"
   puts(_("%s warning:  cannot save options - %s not regular file\n"));
-#line 257 "../save.c"
-  puts(_("%s warning:  cannot save options - %s not regular file\n"));
-#line 535 "../save.c"
+#line 567 "../save.c"
   puts(_("%s warning:  cannot save options - %s not regular file\n"));
   /* END-LIBOPTS-MESSAGES */
 
   /* USAGE-TEXT: */
-#line 876 "../usage.c"
+#line 822 "../usage.c"
   puts(_("\t\t\t\t- an alternate for '%s'\n"));
-#line 1151 "../usage.c"
+#line 1097 "../usage.c"
   puts(_("Version, usage and configuration options:"));
-#line 927 "../usage.c"
+#line 873 "../usage.c"
   puts(_("\t\t\t\t- default option for unnamed options\n"));
-#line 840 "../usage.c"
+#line 786 "../usage.c"
   puts(_("\t\t\t\t- disabled as '--%s'\n"));
-#line 1120 "../usage.c"
+#line 1066 "../usage.c"
   puts(_(" --- %-14s %s\n"));
-#line 1118 "../usage.c"
+#line 1064 "../usage.c"
   puts(_("This option has been disabled"));
-#line 867 "../usage.c"
+#line 813 "../usage.c"
   puts(_("\t\t\t\t- enabled by default\n"));
 #line 40 "../alias.c"
   puts(_("%s error:  only "));
-#line 1197 "../usage.c"
+#line 1143 "../usage.c"
   puts(_(" - examining environment variables named %s_*\n"));
 #line 168 "../file.c"
   puts(_("\t\t\t\t- file must not pre-exist\n"));
 #line 172 "../file.c"
   puts(_("\t\t\t\t- file must pre-exist\n"));
-#line 383 "../usage.c"
+#line 329 "../usage.c"
   puts(_("Options are specified by doubled hyphens and their name or by a single\n"
        "hyphen and the flag character.\n"));
-#line 921 "../makeshell.c"
+#line 882 "../makeshell.c"
   puts(_("\n"
        "= = = = = = = =\n\n"
        "This incarnation of genshell will produce\n"
        "a shell script to parse the options for %s:\n\n"));
-#line 167 "../enum.c"
+#line 142 "../enum.c"
   puts(_("  or an integer mask with any of the lower %d bits set\n"));
-#line 900 "../usage.c"
+#line 846 "../usage.c"
   puts(_("\t\t\t\t- is a set membership option\n"));
-#line 921 "../usage.c"
+#line 867 "../usage.c"
   puts(_("\t\t\t\t- must appear between %d and %d times\n"));
-#line 385 "../usage.c"
+#line 331 "../usage.c"
   puts(_("Options are specified by single or double hyphens and their name.\n"));
-#line 907 "../usage.c"
+#line 853 "../usage.c"
   puts(_("\t\t\t\t- may appear multiple times\n"));
-#line 894 "../usage.c"
+#line 840 "../usage.c"
   puts(_("\t\t\t\t- may not be preset\n"));
-#line 1312 "../usage.c"
+#line 1258 "../usage.c"
   puts(_("   Arg Option-Name    Description\n"));
-#line 1248 "../usage.c"
+#line 1194 "../usage.c"
   puts(_("  Flg Arg Option-Name    Description\n"));
-#line 1306 "../usage.c"
+#line 1252 "../usage.c"
   puts(_("  Flg Arg Option-Name    Description\n"));
-#line 1307 "../usage.c"
+#line 1253 "../usage.c"
   puts(_(" %3s %s"));
-#line 1313 "../usage.c"
+#line 1259 "../usage.c"
   puts(_(" %3s %s"));
-#line 390 "../usage.c"
+#line 336 "../usage.c"
   puts(_("The '-#<number>' option may omit the hash char\n"));
-#line 386 "../usage.c"
+#line 332 "../usage.c"
   puts(_("All arguments are named options.\n"));
-#line 974 "../usage.c"
+#line 920 "../usage.c"
   puts(_(" - reading file %s"));
-#line 412 "../usage.c"
+#line 358 "../usage.c"
   puts(_("\n"
        "Please send bug reports to:  <%s>\n"));
 #line 100 "../version.c"
@@ -1640,17 +1640,17 @@ ocsptool --help for usage instructions.\n"));
 #line 129 "../version.c"
   puts(_("\n"
        "Please send bug reports to:  <%s>\n"));
-#line 906 "../usage.c"
+#line 852 "../usage.c"
   puts(_("\t\t\t\t- may NOT appear - preset only\n"));
-#line 947 "../usage.c"
+#line 893 "../usage.c"
   puts(_("\n"
        "The following option preset mechanisms are supported:\n"));
-#line 1195 "../usage.c"
+#line 1141 "../usage.c"
   puts(_("\n"
        "The following option preset mechanisms are supported:\n"));
-#line 685 "../usage.c"
+#line 631 "../usage.c"
   puts(_("prohibits these options:\n"));
-#line 680 "../usage.c"
+#line 626 "../usage.c"
   puts(_("prohibits the option '%s'\n"));
 #line 81 "../numeric.c"
   puts(_("%s%ld to %ld"));
@@ -1668,28 +1668,28 @@ ocsptool --help for usage instructions.\n"));
   puts(_("%sis scalable with a suffix: k/K/m/M/g/G/t/T\n"));
 #line 77 "../numeric.c"
   puts(_("%sless than or equal to %ld"));
-#line 393 "../usage.c"
+#line 339 "../usage.c"
   puts(_("Operands and options may be intermixed.  They will be reordered.\n"));
-#line 655 "../usage.c"
+#line 601 "../usage.c"
   puts(_("requires the option '%s'\n"));
-#line 658 "../usage.c"
+#line 604 "../usage.c"
   puts(_("requires these options:\n"));
-#line 1324 "../usage.c"
+#line 1270 "../usage.c"
   puts(_("   Arg Option-Name   Req?  Description\n"));
-#line 1318 "../usage.c"
+#line 1264 "../usage.c"
   puts(_("  Flg Arg Option-Name   Req?  Description\n"));
-#line 168 "../enum.c"
+#line 143 "../enum.c"
   puts(_("or you may use a numeric representation.  Preceding these with a '!'\n"
        "will clear the bits, specifying 'none' will clear all bits, and 'all'\n"
        "will set them all.  Multiple entries may be passed as an option\n"
        "argument list.\n"));
-#line 913 "../usage.c"
+#line 859 "../usage.c"
   puts(_("\t\t\t\t- may appear up to %d times\n"));
-#line 77 "../enum.c"
+#line 52 "../enum.c"
   puts(_("The valid \"%s\" option keywords are:\n"));
-#line 1155 "../usage.c"
+#line 1101 "../usage.c"
   puts(_("The next option supports vendor supported extra options:"));
-#line 776 "../usage.c"
+#line 722 "../usage.c"
   puts(_("These additional options are:"));
   /* END-USAGE-TEXT */
 }

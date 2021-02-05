@@ -71,22 +71,6 @@
 
 #if defined(_WIN32) || defined(__CYGWIN__)
 
-#ifdef WINAPI_FAMILY
-#if !WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
-#define WP80
-using namespace Platform;
-using namespace Windows::Foundation;
-using namespace Windows::System::Threading;
-#define USE_THREADPOOL
-
-#define InitializeCriticalSection(x) InitializeCriticalSectionEx(x, 0, 0)
-#define GetSystemInfo(x) GetNativeSystemInfo(x)
-#define CreateEvent(attr, reset, init, name) CreateEventEx(attr, name, ((reset) ? CREATE_EVENT_MANUAL_RESET : 0) | ((init) ? CREATE_EVENT_INITIAL_SET : 0), EVENT_ALL_ACCESS)
-#define WaitForSingleObject(a, b) WaitForSingleObjectEx(a, b, FALSE)
-#define WaitForMultipleObjects(a, b, c, d) WaitForMultipleObjectsEx(a, b, c, d, FALSE)
-#endif
-#endif
-
 WELS_THREAD_ERROR_CODE    WelsMutexInit (WELS_MUTEX*    mutex) {
   InitializeCriticalSection (mutex);
 
@@ -200,18 +184,7 @@ void WelsSleep (uint32_t dwMilliSecond) {
 
 WELS_THREAD_ERROR_CODE    WelsThreadCreate (WELS_THREAD_HANDLE* thread,  LPWELS_THREAD_ROUTINE  routine,
     void* arg, WELS_THREAD_ATTR attr) {
-#ifdef USE_THREADPOOL
-  HANDLE h = CreateEvent (NULL, FALSE, FALSE, NULL);
-  HANDLE h2;
-  DuplicateHandle (GetCurrentProcess(), h, GetCurrentProcess(), &h2, 0, FALSE, DUPLICATE_SAME_ACCESS);
-  ThreadPool::RunAsync (ref new WorkItemHandler ([ = ] (IAsyncAction^) {
-    routine (arg);
-    SetEvent (h2);
-    CloseHandle (h2);
-  }, CallbackContext::Any), WorkItemPriority::Normal, WorkItemOptions::TimeSliced);
-#else
   WELS_THREAD_HANDLE   h = CreateThread (NULL, 0, routine, arg, 0, NULL);
-#endif
 
   if (h == NULL) {
     return WELS_THREAD_ERROR_GENERAL;

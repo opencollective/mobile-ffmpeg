@@ -307,12 +307,53 @@ uint32_t WelsCPUFeatureDetect (int32_t* pNumberOfLogicProcessors) {
          WELS_CPU_NEON;
 }
 
-#else /* Neither X86_ASM, HAVE_NEON nor HAVE_NEON_AARCH64 */
+#elif defined(mips)
+/* for loongson */
+static uint32_t get_cpu_flags_from_cpuinfo(void)
+{
+    uint32_t flags = 0;
+
+# ifdef __linux__
+    FILE* fp = fopen("/proc/cpuinfo", "r");
+    if (!fp)
+        return flags;
+
+    char buf[200];
+    memset(buf, 0, sizeof(buf));
+    while (fgets(buf, sizeof(buf), fp)) {
+        if (!strncmp(buf, "model name", strlen("model name"))) {
+            if (strstr(buf, "Loongson-3A") || strstr(buf, "Loongson-3B") ||
+                strstr(buf, "Loongson-2K")) {
+                flags |= WELS_CPU_MMI;
+            }
+            break;
+        }
+    }
+    while (fgets(buf, sizeof(buf), fp)) {
+        if(!strncmp(buf, "ASEs implemented", strlen("ASEs implemented"))) {
+            if (strstr(buf, "loongson-mmi") || strstr(buf, "loongson-ext")) {
+                flags |= WELS_CPU_MMI;
+            }
+            if (strstr(buf, "msa")) {
+                flags |= WELS_CPU_MSA;
+            }
+            break;
+        }
+    }
+    fclose(fp);
+# endif
+
+    return flags;
+}
+
+uint32_t WelsCPUFeatureDetect (int32_t* pNumberOfLogicProcessors) {
+    return get_cpu_flags_from_cpuinfo();
+}
+
+#else /* Neither X86_ASM, HAVE_NEON, HAVE_NEON_AARCH64 nor mips */
 
 uint32_t WelsCPUFeatureDetect (int32_t* pNumberOfLogicProcessors) {
   return 0;
 }
 
 #endif
-
-

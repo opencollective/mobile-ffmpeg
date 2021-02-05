@@ -11,7 +11,8 @@ TESTS = $(check_PROGRAMS) \
     test_slices.sh \
     test_smp.sh \
     test_tools.sh \
-    test_weird_shapes.sh
+    test_weird_shapes.sh \
+	test_pu_depth_constraints.sh 
 
 EXTRA_DIST = \
     test_external_symbols.sh \
@@ -26,6 +27,7 @@ EXTRA_DIST = \
     test_smp.sh \
     test_tools.sh \
     test_weird_shapes.sh \
+	test_pu_depth_constraints.sh \
     util.sh
 
 check_PROGRAMS = kvazaar_tests
@@ -50,6 +52,8 @@ kvazaar_tests_LDFLAGS = -static $(top_builddir)/src/libkvazaar.la $(LIBS)
 nodist_EXTRA_kvazaar_tests_SOURCES = cpp.cpp
 
 if USE_CRYPTOPP
+XFAIL_TESTS = \
+	test_external_symbols.sh
 kvazaar_tests_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(kvazaar_tests_CFLAGS) $(CXXFLAGS) \
 	$(kvazaar_tests_LDFLAGS) $(LDFLAGS) -o $@

@@ -32,6 +32,8 @@
 
 #include "utils.h"
 
+unsigned _gnutls_ecc_curve_is_supported(gnutls_ecc_curve_t);
+
 /* Check whether the string functions will return a non-repeated and
  * non null value.
  */
@@ -113,9 +115,21 @@ void doit(void)
 		check_non_null(gnutls_sec_param_get_name(i));
 	}
 
+	check_non_null(gnutls_certificate_verification_profile_get_name(GNUTLS_PROFILE_VERY_WEAK));
+	check_non_null(gnutls_certificate_verification_profile_get_name(GNUTLS_PROFILE_LOW));
+	check_non_null(gnutls_certificate_verification_profile_get_name(GNUTLS_PROFILE_LEGACY));
+	check_non_null(gnutls_certificate_verification_profile_get_name(GNUTLS_PROFILE_MEDIUM));
+	check_non_null(gnutls_certificate_verification_profile_get_name(GNUTLS_PROFILE_HIGH));
+	check_non_null(gnutls_certificate_verification_profile_get_name(GNUTLS_PROFILE_ULTRA));
+
 	for (i=GNUTLS_ECC_CURVE_INVALID+1;i<=GNUTLS_ECC_CURVE_MAX;i++) {
+		if (_gnutls_ecc_curve_is_supported(i) == 0)
+			continue;
+
 		check_unique_non_null(gnutls_ecc_curve_get_name(i));
 		if (i == GNUTLS_ECC_CURVE_X25519)
+			continue; /* no oid yet */
+		if (i == GNUTLS_ECC_CURVE_X448)
 			continue; /* no oid yet */
 		check_unique_non_null(gnutls_ecc_curve_get_oid(i));
 	}

@@ -1,6 +1,5 @@
-/.deps/
-/.libs/
-*.o
 /Makefile
-/elements
 /outline
+*.o
+/elements
+/.deps

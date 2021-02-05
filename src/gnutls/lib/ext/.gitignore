@@ -1,6 +1,6 @@
-/.libs/
 /.deps/
-*.o
+/.libs/
 *.lo
+*.o
+*.la
 /Makefile
-/libgnutls_ext.la
